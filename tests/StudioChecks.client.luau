@@ -290,6 +290,19 @@ if scenario == "bot" then
 	menu:FireServer("training")
 end
 
+-- The game's screens and signs draw each object's children over it (see Hud). One that sorts by ZIndex alone draws the
+-- garage panel over its own buttons.
+for _, gui in player:WaitForChild("PlayerGui"):GetChildren() do
+	local ours = gui.Name == "FightHud"
+		or gui.Name == "Jumbotron"
+		or gui.Name == "StatuePlaque"
+		or gui.Name == "BoardVersus"
+		or gui.Name == "BoardBots"
+	if ours and gui:IsA("LayerCollector") and gui.ZIndexBehavior ~= Enum.ZIndexBehavior.Sibling then
+		task.spawn(error, `{gui.Name} draws children under their parents ({gui.ZIndexBehavior})`)
+	end
+end
+
 -- Wait for the server to say the fights have settled, then record what this client sees of every ring at that moment.
 if ReplicatedStorage:GetAttribute("ChecksDump") ~= true then
 	ReplicatedStorage:GetAttributeChangedSignal("ChecksDump"):Wait()

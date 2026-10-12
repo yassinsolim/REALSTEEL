@@ -200,6 +200,7 @@ local function impact(self: Effects, position: Vector3, toward: Vector3, color: 
 	local ringPart = anchorPart(self, CFrame.new(position))
 	local ring = Instance.new("BillboardGui")
 	ring.Name = "Ring"
+	ring.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	ring.Adornee = ringPart
 	ring.AlwaysOnTop = true
 	ring.LightInfluence = 0

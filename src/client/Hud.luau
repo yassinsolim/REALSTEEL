@@ -404,6 +404,9 @@ function Hud.new(): Hud
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "FightHud"
 	gui.ResetOnSpawn = false
+	-- The game's screens draw each object's children over it and order siblings by ZIndex. A ScreenGui made by script sorts
+	-- all its descendants by ZIndex unless told to, which drew the garage panel (ZIndex 30) over its own buttons.
+	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	-- Keep the default safe area so the bars clear the Roblox top bar and device notches.
 	gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
 

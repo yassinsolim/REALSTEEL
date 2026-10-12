@@ -181,6 +181,7 @@ function Build.label(
 ): TextLabel
 	local gui = Instance.new("SurfaceGui")
 	gui.Name = "Label"
+	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	gui.Face = face or Enum.NormalId.Front
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	gui.PixelsPerStud = pixelsPerStud or 40

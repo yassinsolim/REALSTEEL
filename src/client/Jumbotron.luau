@@ -72,6 +72,7 @@ end
 local function newFace(part: BasePart, gui: Instance, options: Options): Face
 	local surface = Instance.new("SurfaceGui")
 	surface.Name = "Jumbotron"
+	surface.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	surface.Adornee = part
 	surface.Face = Enum.NormalId.Front
 	surface.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud

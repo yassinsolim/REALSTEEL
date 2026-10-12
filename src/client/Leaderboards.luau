@@ -58,6 +58,7 @@ end
 local function newPanel(part: BasePart, board: FoundryLayout.Board, gui: Instance): Panel
 	local surface = Instance.new("SurfaceGui")
 	surface.Name = board.name
+	surface.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	surface.Adornee = part
 	surface.Face = Enum.NormalId.Front
 	surface.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud

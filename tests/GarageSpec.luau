@@ -140,6 +140,8 @@ return function(): (number, { string })
 	temp.Parent = ServerStorage
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "__GarageSpecGui"
+	-- Like the game's HUD (see Hud), which the panel lives in.
+	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	gui.Parent = StarterGui
 	local scenes: { Scene } = {}
 

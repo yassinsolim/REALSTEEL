@@ -75,6 +75,7 @@ function Statue.new(robot: FighterView.Robot, state: Instance): Statue
 		end
 		local surface = Instance.new("SurfaceGui")
 		surface.Name = "StatuePlaque"
+		surface.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 		surface.Adornee = plaque
 		surface.Face = Enum.NormalId.Front
 		surface.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
