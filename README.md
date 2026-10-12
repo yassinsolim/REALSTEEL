@@ -14,6 +14,15 @@ all-time leaderboards hang on the north wall, and whoever holds the champion's t
 there as a gold statue.
 Hit effects, lights and sound come with it.
 
+## Where it lives
+
+- **Code:** the private GitHub repository [yassinsolim/REALSTEEL](https://github.com/yassinsolim/REALSTEEL), branch `main`.
+  The place files are built from it and never committed.
+- **Game:** the private Roblox experience REALSTEEL (universe `10770512111`, place `76746803669217`).
+  `.\scripts\publish.ps1` runs the validation, builds the game place and publishes it as a new version through Open
+  Cloud. The API key and the IDs are kept for your Windows user outside the repository (see the notes at the top of the
+  script). Commit before you publish, so every published version can be traced to a commit.
+
 ## Run it
 
 ```powershell
