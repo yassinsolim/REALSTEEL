@@ -50,6 +50,7 @@ def palette_materials(armor, accent, finish="BRUSHED", frame=None):
     styles = {
         "Armor": (armor, metallic, roughness, 0.0),
         "Dark": (dark, 0.6, 0.5, 0.0),
+        "Steel": ((0.66, 0.68, 0.72), 1.0, 0.2, 0.0),
         "Trim": (accent, 0.45, 0.35, 0.0),
         "Glow": (glow, 0.0, 0.3, 6.0),
     }

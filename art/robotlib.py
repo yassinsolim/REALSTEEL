@@ -73,15 +73,23 @@ class PartBuilder:
                 clamp_overlap=True,
             )
 
-    def box(self, center, size, bevel=0.05, segments=2):
+    def _rotate(self, bm, center, rot):
+        """Turns freshly made geometry about its center by rot (degrees, as in rotation_matrix), for angled plates."""
+        if rot is not None:
+            pivot = Vector(center)
+            turn = Matrix.Translation(pivot) @ rotation_matrix(rot) @ Matrix.Translation(-pivot)
+            bmesh.ops.transform(bm, matrix=turn, verts=bm.verts[:])
+
+    def box(self, center, size, bevel=0.05, segments=2, rot=None):
         tmp = bmesh.new()
         bmesh.ops.create_cube(tmp, size=1.0)
         for vert in tmp.verts:
             vert.co = Vector((vert.co.x * size[0], vert.co.y * size[1], vert.co.z * size[2])) + Vector(center)
         self._bevel(tmp, min(bevel, min(size) * 0.45), segments)
+        self._rotate(tmp, center, rot)
         self._merge(tmp)
 
-    def taper(self, center, height, bottom, top, shift=(0, 0), bevel=0.05, segments=2):
+    def taper(self, center, height, bottom, top, shift=(0, 0), bevel=0.05, segments=2, rot=None):
         """A block whose bottom face is bottom=(width, depth) and top face top=(width, depth), top shifted by shift."""
         tmp = bmesh.new()
         cx, cy, cz = center
@@ -100,6 +108,7 @@ class PartBuilder:
             tmp.faces.new((low_ring[index], low_ring[nxt], high_ring[nxt], high_ring[index]))
         bmesh.ops.recalc_face_normals(tmp, faces=tmp.faces[:])
         self._bevel(tmp, min(bevel, height * 0.45, min(bottom) * 0.45, min(top) * 0.45), segments)
+        self._rotate(tmp, center, rot)
         self._merge(tmp)
 
     def cylinder(self, start, end, radius, radius_end=None, segments=12, bevel=0.0):
@@ -130,7 +139,7 @@ class PartBuilder:
             vert.co = Vector((vert.co.x * scale[0], vert.co.y * scale[1], vert.co.z * scale[2])) + Vector(center)
         self._merge(tmp)
 
-    def finish(self):
+    def finish(self, smooth=False):
         bm = self.bm
         bmesh.ops.triangulate(bm, faces=bm.faces[:])
         bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
@@ -148,12 +157,34 @@ class PartBuilder:
         obj = bpy.data.objects.new(self.name, mesh)
         obj.location = to_blender(center)
         bpy.context.scene.collection.objects.link(obj)
+        if smooth:
+            _smooth_bevels(obj)
         return Part(self.name, self.joint, self.role, center, high - low, obj, triangles)
 
 
+# Edges sharper than this stay sharp when a robot is shaded smoothly.
+SHARP_ANGLE = math.radians(36)
+
+
+def _smooth_bevels(obj):
+    """Shades rounded edges smoothly and keeps big faces flat: smooth shading with the sharp edges kept, and normals
+    weighted by face area, so a bevel catches the light like a machined edge instead of showing its facets."""
+    mesh = obj.data
+    for polygon in mesh.polygons:
+        polygon.use_smooth = True
+    mesh.set_sharp_from_angle(angle=SHARP_ANGLE)
+    modifier = obj.modifiers.new("WeightedNormal", "WEIGHTED_NORMAL")
+    modifier.mode = "FACE_AREA"
+    modifier.weight = 50
+    modifier.keep_sharp = True
+    with bpy.context.temp_override(object=obj, active_object=obj):
+        bpy.ops.object.modifier_apply(modifier=modifier.name)
+
+
 class Robot:
-    def __init__(self, name):
+    def __init__(self, name, smooth=False):
         self.name = name
+        self.smooth = smooth
         self.joints = []
         self.parts = []
         self._builders = {}
@@ -169,7 +200,7 @@ class Robot:
         return self._builders[key]
 
     def finish(self):
-        self.parts = [builder.finish() for builder in self._builders.values()]
+        self.parts = [builder.finish(self.smooth) for builder in self._builders.values()]
         self._builders = {}
 
     def joint_map(self):
