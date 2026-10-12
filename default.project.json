@@ -1,0 +1,154 @@
+{
+  "name": "REALSTEEL",
+  "serveAddress": "127.0.0.1",
+  "servePort": 34880,
+  "tree": {
+    "$className": "DataModel",
+    "$ignoreUnknownInstances": true,
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "$ignoreUnknownInstances": true,
+      "Shared": {
+        "$className": "Folder",
+        "$path": "src/shared",
+        "$ignoreUnknownInstances": true
+      },
+      "Tests": {
+        "$className": "Folder",
+        "FightSimSpec": {
+          "$path": "tests/FightSimSpec.luau"
+        },
+        "RobotSpec": {
+          "$path": "tests/RobotSpec.luau"
+        },
+        "BotSpec": {
+          "$path": "tests/BotSpec.luau"
+        },
+        "LoadoutSpec": {
+          "$path": "tests/LoadoutSpec.luau"
+        },
+        "GarageSpec": {
+          "$path": "tests/GarageSpec.luau"
+        },
+        "GarageServerSpec": {
+          "$path": "tests/GarageServerSpec.luau"
+        },
+        "QueueSpec": {
+          "$path": "tests/QueueSpec.luau"
+        },
+        "LayoutSpec": {
+          "$path": "tests/LayoutSpec.luau"
+        },
+        "StandingsSpec": {
+          "$path": "tests/StandingsSpec.luau"
+        },
+        "RecordsSpec": {
+          "$path": "tests/RecordsSpec.luau"
+        }
+      }
+    },
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "$path": "src/server",
+      "$ignoreUnknownInstances": true
+    },
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "$ignoreUnknownInstances": true,
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "$path": "src/client",
+        "$ignoreUnknownInstances": true
+      }
+    },
+    "Players": {
+      "$className": "Players",
+      "$properties": {
+        "CharacterAutoLoads": true
+      }
+    },
+    "StarterGui": {
+      "$className": "StarterGui",
+      "$ignoreUnknownInstances": true,
+      "$properties": {
+        "ScreenOrientation": "LandscapeSensor"
+      }
+    },
+    "Workspace": {
+      "$className": "Workspace",
+      "$ignoreUnknownInstances": true,
+      "$properties": {
+        "StreamingEnabled": true,
+        "AuthorityMode": "Server",
+        "NextGenerationReplication": "Enabled",
+        "PlayerScriptsUseInputActionSystem": "Enabled",
+        "SignalBehavior": "Deferred",
+        "UseFixedSimulation": "Enabled"
+      }
+    },
+    "Lighting": {
+      "$className": "Lighting",
+      "$ignoreUnknownInstances": true,
+      "$properties": {
+        "Technology": "Future",
+        "GlobalShadows": true,
+        "Brightness": 0.6,
+        "ClockTime": 0,
+        "Ambient": [0.12, 0.14, 0.24],
+        "OutdoorAmbient": [0.1, 0.12, 0.22],
+        "EnvironmentDiffuseScale": 0.3,
+        "EnvironmentSpecularScale": 0.2,
+        "ExposureCompensation": 0
+      },
+      "Sky": {
+        "$className": "Sky",
+        "$properties": {
+          "StarCount": 0,
+          "CelestialBodiesShown": false,
+          "SkyboxBk": "",
+          "SkyboxDn": "",
+          "SkyboxFt": "",
+          "SkyboxLf": "",
+          "SkyboxRt": "",
+          "SkyboxUp": ""
+        }
+      },
+      "Atmosphere": {
+        "$className": "Atmosphere",
+        "$properties": {
+          "Density": 0.38,
+          "Offset": 0.1,
+          "Color": [0.1, 0.14, 0.32],
+          "Decay": [0.04, 0.06, 0.16],
+          "Glare": 0,
+          "Haze": 2
+        }
+      },
+      "Bloom": {
+        "$className": "BloomEffect",
+        "$properties": {
+          "Intensity": 0.3,
+          "Size": 20,
+          "Threshold": 1.1
+        }
+      },
+      "ColorGrade": {
+        "$className": "ColorCorrectionEffect",
+        "$properties": {
+          "Contrast": 0.12,
+          "Saturation": 0.12,
+          "TintColor": [1, 0.98, 0.96]
+        }
+      },
+      "Depth": {
+        "$className": "DepthOfFieldEffect",
+        "$properties": {
+          "FarIntensity": 0.3,
+          "FocusDistance": 18,
+          "InFocusRadius": 14,
+          "NearIntensity": 0
+        }
+      }
+    }
+  }
+}

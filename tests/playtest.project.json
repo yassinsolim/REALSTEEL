@@ -1,0 +1,66 @@
+{
+  "name": "REALSTEEL Checks",
+  "servePort": 34881,
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "Shared": { "$path": "../src/shared" },
+      "Tests": {
+        "$className": "Folder",
+        "FightSimSpec": { "$path": "FightSimSpec.luau" },
+        "RobotSpec": { "$path": "RobotSpec.luau" },
+        "BotSpec": { "$path": "BotSpec.luau" },
+        "LoadoutSpec": { "$path": "LoadoutSpec.luau" },
+        "GarageSpec": { "$path": "GarageSpec.luau" },
+        "GarageServerSpec": { "$path": "GarageServerSpec.luau" },
+        "QueueSpec": { "$path": "QueueSpec.luau" },
+        "LayoutSpec": { "$path": "LayoutSpec.luau" },
+        "StandingsSpec": { "$path": "StandingsSpec.luau" },
+        "HoistSpec": { "$path": "HoistSpec.luau" },
+        "RecordsSpec": { "$path": "RecordsSpec.luau" }
+      }
+    },
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "$path": "../src/server",
+      "StudioChecks": { "$path": "StudioChecks.server.luau" }
+    },
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "$path": "../src/client",
+        "StudioChecks": { "$path": "StudioChecks.client.luau" }
+      }
+    },
+    "Players": {
+      "$className": "Players",
+      "$properties": { "CharacterAutoLoads": true }
+    },
+    "Workspace": {
+      "$className": "Workspace",
+      "$properties": {
+        "StreamingEnabled": true,
+        "AuthorityMode": "Server",
+        "NextGenerationReplication": "Enabled",
+        "PlayerScriptsUseInputActionSystem": "Enabled",
+        "UseFixedSimulation": "Enabled"
+      }
+    },
+    "Lighting": {
+      "$className": "Lighting",
+      "$properties": {
+        "Technology": "ShadowMap",
+        "GlobalShadows": true,
+        "Brightness": 2.2,
+        "ClockTime": 21,
+        "Ambient": [0.18, 0.2, 0.26],
+        "OutdoorAmbient": [0.22, 0.24, 0.3],
+        "EnvironmentDiffuseScale": 0.6,
+        "EnvironmentSpecularScale": 0.4,
+        "ExposureCompensation": 0.1
+      }
+    }
+  }
+}
