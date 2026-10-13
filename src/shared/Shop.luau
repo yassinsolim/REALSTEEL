@@ -25,6 +25,38 @@ local Shop = {}
 
 Shop.Items = {
 	{
+		id = "body.haymaker",
+		name = "HAYMAKER",
+		kind = "body",
+		blurb = "Prizefighter armor for ANVIL, with a headguard.",
+		product = 3718288893,
+		robux = 499,
+	},
+	{
+		id = "body.bastion",
+		name = "BASTION",
+		kind = "body",
+		blurb = "Fortress armor for BULWARK, with turret shoulders.",
+		product = 3718288897,
+		robux = 499,
+	},
+	{
+		id = "body.spectre",
+		name = "SPECTRE",
+		kind = "body",
+		blurb = "Stealth armor for LANCE, with one glowing eye.",
+		product = 3718288898,
+		robux = 499,
+	},
+	{
+		id = "body.ronin",
+		name = "RONIN",
+		kind = "body",
+		blurb = "Samurai armor for RAZOR, with a horned helmet.",
+		product = 3718288900,
+		robux = 499,
+	},
+	{
 		id = "body.monarch",
 		name = "MONARCH",
 		kind = "body",

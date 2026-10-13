@@ -11,6 +11,10 @@ local assets: { [string]: Entry } = {
 	Lance = { Id = 108908538179424 },
 	Razor = { Id = 130853626050404 },
 	Maul = { Id = 125438959191514 },
+	Haymaker = { Id = 111311372194153 },
+	Bastion = { Id = 107105822217224 },
+	Spectre = { Id = 94154726549165 },
+	Ronin = { Id = 123454649192207 },
 	Monarch = { Id = 137648048729760 },
 }
 

@@ -5,10 +5,10 @@ on Roblox's server authority mode (client prediction, rollback and resimulation)
 
 Fighters are five original robots modeled in Blender, one for each chassis (ANVIL, BULWARK, LANCE, RAZOR and MAUL), built
 on one skeleton, finished in worn painted metal and animated from the simulation state. Every player fits a robot out in
-the garage: a chassis, a module each for arms, core and legs, and a paint job, and can buy a premium body (MONARCH, for
-MAUL) with Robux or crests with the coins every match pays. There are four attacks (a punch and a kick
-for each side), guard and dash, best-of-three rounds with a clock, a computer opponent at three levels, 1v1 versus, a
-training mode with a frame meter, and touch controls. Players walk around
+the garage: a chassis, a module each for arms, core and legs, and a paint job, and can buy a premium body for any chassis
+(HAYMAKER, BASTION, SPECTRE, RONIN or MONARCH) with Robux or crests with the coins every match pays. There are four
+attacks (a punch and a kick for each side), guard and dash, best-of-three rounds with a clock, a computer opponent at
+three levels, 1v1 versus, a training mode with a frame meter, and touch controls. Players walk around
 THE FOUNDRY, a robot fight club hall with the main ring in its middle, two practice pits beside it, everyone's robots in
 garage bays along one wall, and a line that hands each ring to whoever should have it. Robots wait hanging from winches
 under each ring's screen and are dropped onto the canvas when a match starts; wins go on the players' records, the
@@ -422,6 +422,10 @@ with the same size, reach and stats; a crest only sits on the head.
 
 | Item | What | Price |
 | --- | --- | --- |
+| HAYMAKER | a premium body for ANVIL: a retro prizefighter with a padded headguard, a chest dial and huge padded gloves | 499 Robux |
+| BASTION | a premium body for BULWARK: a rounded fortress with turret-dome shoulders and tower-shield forearms | 499 Robux |
+| SPECTRE | a premium body for LANCE: a sleek stealth fencer with an egg head, one glowing slit and lance-tipped fists | 499 Robux |
+| RONIN | a premium body for RAZOR: a samurai with a horned kabuto helmet, a face mask and stacked shoulder plates | 499 Robux |
 | MONARCH | a premium body for MAUL: smooth rounded champion's armor, swept pauldrons, a gold V and title belt | 499 Robux |
 | CROWN | a crest: five gold points with a gem on each | 600 coins |
 | MOHAWK | a crest: four swept blades with a glowing edge | 350 coins |
@@ -454,9 +458,11 @@ crest on the PAINT page that is not owned yet carries an amber mark, and picking
   test purchases in Studio are free.
 - **Adding an item.** A crest: its kit in `art/kits.py`, its name and kit at the end of `Looks.Crests`, `Looks.CrestKits`
   and `Looks.CrestItems`, and the item in `Shop.Items`. A body: a frame module in `art/` (on the shared skeleton, keeping the
-  chassis' reach; see `art/monarch.py`) listed in `build_robot.PREMIUM`, exported and uploaded like the free frames, then an
+  chassis' reach, built from the shells in `art/shells.py`; see `art/monarch.py`) listed in `build_robot.PREMIUM`, exported
+  and uploaded like the free frames (its model with `upload-robot.ps1`, its textures into `RobotWear.model.json`), then an
   entry at the end of `Looks.Bodies` and the item in `Shop.Items`, then `.\scripts\products.ps1`. `RobotSpec` checks the
-  body's frame and that its strikes reach at its chassis' size; `LoadoutSpec` checks the catalog.
+  body's frame, that its strikes reach at its chassis' size, and that it is uploaded with textures for every finish;
+  `LoadoutSpec` checks the catalog.
 
 ## Robot art and animation
 
@@ -476,10 +482,14 @@ they play exactly like it:
 
 | Body | For | Look | Meshes | Triangles |
 | --- | --- | --- | --- | --- |
+| HAYMAKER | ANVIL | a retro prizefighter: a rounded helmet in a padded headguard, round eyes over a grilled mouth, a barrel chest with a big dial, trunks with a buckled waistband, huge padded gloves with laced cuffs, high-top boots | 55 | 15.5k |
+| BASTION | BULWARK | a rounded fortress: turret-dome shoulders with gun slits, a turtle-shell collar the helmet sinks into, a wide visor, rounded tower shields down the forearms, steel knuckle plates, elephant feet | 56 | 16.9k |
+| SPECTRE | LANCE | a sleek stealth fencer in pearl-like armor: an egg head with one vertical glowing slit, a hard V torso around a glowing core, finned shoulders and back, forearm blades, lance-tipped fists, runner's feet | 56 | 15.6k |
+| RONIN | RAZOR | a samurai in lacquered armor: a domed kabuto with a gold crescent, a dark mask with angry eye slits, a gold sash over a skirt of plates, three flared plates on each shoulder, gold-banded bracers | 47 | 16.3k |
 | MONARCH | MAUL | a champion heavyweight in smooth rounded armor: domed pauldrons, a chest narrowing to the waist, a gold V around a glowing core, an angry visor, a title belt | 59 | 18.6k |
 
-MONARCH is built from `pod` shells (`robotlib.PartBuilder.pod`, a superellipsoid that can flare), which give the rounded
-look the free frames' bevelled boxes do not.
+The premium bodies are built from `pod` shells (`robotlib.PartBuilder.pod`, a superellipsoid that can flare; the shared
+shapes and mesh densities are in `art/shells.py`), which give the rounded look the free frames' bevelled boxes do not.
 
 A frame has one mesh per joint per material role: Armor and Trim take the player's paint, Glow (Neon) the accent color,
 Dark is the frame between the plates (so the gaps read as panel lines) and Steel is bare metal (pistons, rivets, cables,
@@ -495,8 +505,9 @@ knuckle plates). The designs are original: robot boxers in general are fair game
 .\scripts\upload-robot.ps1 -Name Bulwark           # upload art\build\Bulwark.fbx and record the asset ID
 ```
 
-- **Source:** `art/anvil.py`, `bulwark.py`, `lance.py`, `razor.py` and `maul.py` (a frame each), `monarch.py` (a premium
-  body), `skeleton.py` (the shared
+- **Source:** `art/anvil.py`, `bulwark.py`, `lance.py`, `razor.py` and `maul.py` (a frame each), `haymaker.py`,
+  `bastion.py`, `spectre.py`, `ronin.py` and `monarch.py` (the premium bodies) with `shells.py` (their shell shapes),
+  `skeleton.py` (the shared
   joints), `greebles.py` (pistons, cables, rivets, vents), `poses.py` (poses and clips), `wear.py` (the textures),
   `kits.py` (the crests), `robotlib.py`, `exporters.py`, the `preview*.py` renderers and `build_robot.py`. Everything is
   authored in Roblox axes and studs (the robot faces -Z, right is +X).
@@ -540,8 +551,9 @@ knuckle plates). The designs are original: robot boxers in general are fair game
   `RobotSpec` covers every frame's rig data (known roles, the shared skeleton, the rest pose, mirrored joints and left and
   right twin parts, the armor the effects aim at), a frame for every chassis, the clips, the animator, the crests (their
   data, symmetry and where they sit at each chassis' size) and, for every move, that the limb the move names reaches the
-  hit range during the active frames on every chassis' own frame and every premium body at the chassis' size, and that the
-  other limb does it when the robot is drawn as a southpaw (110 checks).
+  hit range during the active frames on every chassis' own frame and every premium body at the chassis' size, that the
+  other limb does it when the robot is drawn as a southpaw, and that every frame is uploaded and has its worn textures for
+  every paint finish (145 checks).
   `BotSpec` covers the round flow (intro, clock, KO, time-up, draws, best of three, rematch, and who has won a match that
   is torn down during its last knockout), that the bot is a pure function of its inputs, that each level reads and
   punishes the way it should, that the stronger levels fire at a walker, guard coming out of a stun and punish a dash,
@@ -550,8 +562,9 @@ knuckle plates). The designs are original: robot boxers in general are fair game
   `LoadoutSpec` covers the garage's data: the catalog, the codes (all 135 loadouts and every paint code survive a round
   trip, nonsense reads as the stock ANVIL), the stats each part derives, the plain-language gain and cost lines, build names,
   that the simulation, the frame data and the bot play each fighter by its own stats, that a timed-out round goes to the
-  fuller health bar, the paint rules, which frame and crest a build and a look are drawn with, premium bodies and what a
-  look keeps of the shop items its wearer does not own, and the shop's catalog, prices and coin rewards (154 checks).
+  fuller health bar, the paint rules, which frame and crest a build and a look are drawn with, premium bodies (one for every
+  chassis, each a frame of its own sold for Robux) and what a look keeps of the shop items its wearer does not own, and the
+  shop's catalog, prices and coin rewards (156 checks).
   `QueueSpec` covers the line for the rings, on one ring and on the hall's three: a bot match starting at once, a 1v1
   pairing the two earliest 1v1 players in order, a lone 1v1 waiter not holding up the line, changing what you wait for
   keeping your place, leaving the game ending the session in your ring and no other, practice filling the pits before the
@@ -584,11 +597,11 @@ knuckle plates). The designs are original: robot boxers in general are fair game
   the panel sends a pick once and again until the server agrees, that quick picks go as one, that a pick the server never
   confirms is given up and a saved garage that arrives late is followed, and, on a desktop view, a phone and a tall narrow
   window, that the panel fits the view, every row of chips and swatches stays on its row, no text is cut off, every gain
-  and cost of the chosen parts is listed, and the equipped preset is marked. The SHOP page: trying an item on (a body with
-  its chassis) without sending anything, buying with Robux only when the item has a product, buying with coins only when
-  there are enough, putting a bought item on once the server says it is owned, equipping and unequipping, the marks on the
-  crests not owned yet and picking one opening the shop, nothing sold before the wallet is known, and a Robux item never
-  prompted twice in a row or while its purchase is on its way (125 checks).
+  and cost of the chosen parts is listed, and the equipped preset is marked. The SHOP page: a card for every item, trying
+  an item on (a body with its chassis) without sending anything, buying with Robux only when the item has a product,
+  buying with coins only when there are enough, putting a bought item on once the server says it is owned, equipping and
+  unequipping, the marks on the crests not owned yet and picking one opening the shop, nothing sold before the wallet is
+  known, and a Robux item never prompted twice in a row or while its purchase is on its way (126 checks).
   Run `require(game.ReplicatedStorage.Tests.GarageSpec:Clone())()`; it builds its own copies of what it tests and cleans up.
 - **Garage server:** `GarageServerSpec` (Studio, Edit mode, 37 checks) runs `src/server/Garage.luau` against a stand-in
   DataStore and stand-in players. It checks that a request is cleaned (out-of-range numbers, NaN, infinity, words, other
@@ -707,8 +720,8 @@ real controller), real-device performance, and the one or two predicted hits per
    then. Look at the garage on a real screen first: the panel has only been checked by measurement (`GarageSpec`), not by
    eye.
 4. Progression, which is what brings people back. The garage is built for it: gameplay parts are sidegrades open to
-   everyone. The shop and its coins exist now (see The shop): one premium body and two coin crests. Next: more premium
-   bodies (one per chassis, then more), liveries and finishes, hit effects and victory emotes for Robux and for coins,
+   everyone. The shop and its coins exist now (see The shop): a premium body for every chassis and two coin crests. Next:
+   more premium bodies, liveries and finishes, hit effects and victory emotes for Robux and for coins,
    mastery with a chassis, ranked play with ratings, and a daily challenge that hands out a limited look. Robux items stay
    cosmetic and are sold directly, never as loot boxes. Try a test purchase in Studio on the published place (free there):
    the local checks place is not tied to the experience, so Roblox will not prompt a purchase in it.

@@ -113,6 +113,10 @@ Looks.Frames = { "Anvil", "Bulwark", "Lance", "Razor", "Maul" }
 Looks.Bodies = {
 	{ name = "STOCK" },
 	{ name = "MONARCH", chassis = 5, frame = "Monarch", item = "body.monarch" },
+	{ name = "HAYMAKER", chassis = 1, frame = "Haymaker", item = "body.haymaker" },
+	{ name = "BASTION", chassis = 2, frame = "Bastion", item = "body.bastion" },
+	{ name = "SPECTRE", chassis = 3, frame = "Spectre", item = "body.spectre" },
+	{ name = "RONIN", chassis = 4, frame = "Ronin", item = "body.ronin" },
 } :: { Body }
 
 -- The distance in RGB below which two colors are too alike to tell fighters apart.

@@ -10,6 +10,7 @@ local FightSim = require(ReplicatedStorage.Shared.FightSim)
 local Loadout = require(ReplicatedStorage.Shared.Loadout)
 local Looks = require(ReplicatedStorage.Shared.Looks)
 local RobotAnimator = require(ReplicatedStorage.Shared.RobotAnimator)
+local RobotAssets = require(ReplicatedStorage.Shared.RobotAssets)
 local RobotClips = require(ReplicatedStorage.Shared.RobotClips)
 local RobotKits = require(ReplicatedStorage.Shared.RobotKits)
 local RobotRigs = require(ReplicatedStorage.Shared.RobotRigs)
@@ -168,6 +169,35 @@ return function(): (number, { string })
 		if body.frame ~= nil then
 			check(`the {body.name} body's frame exists`, (RobotRigs :: any)[body.frame] ~= nil)
 		end
+	end
+	-- Every frame is uploaded and has its worn-metal textures for every paint finish: a frame without a model is drawn as a
+	-- blockout, and one without textures in plain colors.
+	do
+		local wear = ReplicatedStorage.Shared:FindFirstChild("RobotWear")
+		local notUploaded: { string } = {}
+		local unworn: { string } = {}
+		for frameName in RobotRigs :: { [string]: any } do
+			local asset = RobotAssets[frameName]
+			if asset == nil or asset.Id <= 0 then
+				table.insert(notUploaded, frameName)
+			end
+			local folder = if wear ~= nil then wear:FindFirstChild(frameName) else nil
+			for _, finish in Looks.Finishes do
+				local appearance = if folder ~= nil then folder:FindFirstChild(finish.name) else nil
+				if appearance == nil or not appearance:IsA("SurfaceAppearance") then
+					table.insert(unworn, `{frameName} {finish.name}`)
+				end
+			end
+		end
+		check("every frame is uploaded", #notUploaded == 0, table.concat(notUploaded, ", "))
+		check("every frame has worn textures for every finish", #unworn == 0, table.concat(unworn, ", "))
+		local strays: { string } = {}
+		for name in RobotAssets do
+			if (RobotRigs :: any)[name] == nil then
+				table.insert(strays, name)
+			end
+		end
+		check("every uploaded model is a frame", #strays == 0, table.concat(strays, ", "))
 	end
 
 	-- Clips: sampling hits its keys, loops are continuous, and nothing sinks into the floor.

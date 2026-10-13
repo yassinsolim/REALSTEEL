@@ -712,6 +712,33 @@ return function(): (number, { string })
 				and Looks.frameFor({ chassis = ANVIL, arms = 1, core = 1, legs = 1 }, wearsMonarch) == "Anvil"
 				and Looks.frameFor(maulBuild, Looks.default()) == "Maul"
 		)
+		local bodiesFor: { [number]: number } = {}
+		local bodyFrames: { [string]: boolean } = {}
+		local ownFrames, forRobux = true, true
+		for index, body in Looks.Bodies do
+			if body.chassis == nil then
+				continue
+			end
+			bodiesFor[body.chassis] = (bodiesFor[body.chassis] or 0) + 1
+			local frame = body.frame or ""
+			if frame == "" or bodyFrames[frame] or table.find(Looks.Frames, frame) ~= nil then
+				ownFrames = false
+			end
+			bodyFrames[frame] = true
+			local id = Looks.bodyItem(index)
+			local item = if id ~= nil then Shop.item(id) else nil
+			if item == nil or item.robux == nil or item.robux <= 0 then
+				forRobux = false
+			end
+		end
+		local everyChassis = true
+		for index in Loadout.Chassis do
+			if (bodiesFor[index] or 0) < 1 then
+				everyChassis = false
+			end
+		end
+		check("every chassis has a premium body", everyChassis)
+		check("each premium body is a frame of its own, sold for Robux", ownFrames and forRobux)
 		local premium =
 			{ armor = 2, accent = 3, finish = 2, crest = Looks.crestFor("crest.crown") :: number, body = monarch }
 		local nothing = Looks.strip(premium, function(_item: string): boolean

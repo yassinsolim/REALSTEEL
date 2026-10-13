@@ -368,6 +368,15 @@ return function(): (number, { string })
 				end
 			end
 			check("the shop shows the coins", coinsShown)
+			local cardCount = 0
+			if shopPage ~= nil then
+				for _, item in shopPage:GetDescendants() do
+					if item:IsA("TextButton") and item.Name == "Action" then
+						cardCount += 1
+					end
+				end
+			end
+			check("the shop has a card for every item", cardCount == #Shop.Items, cardCount)
 
 			-- Trying MONARCH on draws it on MAUL without asking the server for anything.
 			panel.actions.item(monarch)

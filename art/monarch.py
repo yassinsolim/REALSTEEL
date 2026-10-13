@@ -10,6 +10,7 @@ keeps MAUL's size and reach, so it plays and reads exactly like the free MAUL.
 
 from greebles import piston, rivets
 from robotlib import Robot
+from shells import BIG, DOME, FINE, MID, PLATE, RIM, SHELL
 from skeleton import SIDES, add_joints
 
 ROLES = {
@@ -19,17 +20,6 @@ ROLES = {
     "Trim": {"color": (0.95, 0.68, 0.18), "material": "Metal", "tint": True},
     "Glow": {"color": (1.0, 0.74, 0.28), "material": "Neon", "tint": True},
 }
-
-# Shell shapes, as (top to bottom, around) roundness exponents: a plate with crisp rounded edges, a softer shell, a dome.
-PLATE = (0.3, 0.33)
-SHELL = (0.4, 0.4)
-DOME = (0.58, 0.42)
-# Mesh density: big shells, medium ones, small details, thin rims. Smooth shading hides the facets, so these stay low
-# enough for a phone to draw a hall full of robots.
-BIG = (20, 10)
-MID = (16, 8)
-FINE = (12, 5)
-RIM = (24, 4)
 
 
 def build():

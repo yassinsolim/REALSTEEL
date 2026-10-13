@@ -19,8 +19,10 @@ import bpy
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import anvil  # noqa: E402
+import bastion  # noqa: E402
 import bulwark  # noqa: E402
 import exporters  # noqa: E402
+import haymaker  # noqa: E402
 import kits  # noqa: E402
 import lance  # noqa: E402
 import maul  # noqa: E402
@@ -31,6 +33,8 @@ import preview_frames  # noqa: E402
 import preview_kits  # noqa: E402
 import razor  # noqa: E402
 import robotlib  # noqa: E402
+import ronin  # noqa: E402
+import spectre  # noqa: E402
 import wear  # noqa: E402
 
 TEAM_BLUE = (0.12, 0.42, 1.0)
@@ -39,7 +43,13 @@ TEAM_BLUE = (0.12, 0.42, 1.0)
 FRAMES = (("ANVIL", anvil, 1.0), ("BULWARK", bulwark, 1.08), ("LANCE", lance, 1.1), ("RAZOR", razor, 0.94), ("MAUL", maul, 1.06))
 
 # The premium bodies: label, module, the free frame of the chassis it is for (it takes that chassis' scale and stats).
-PREMIUM = (("MONARCH", monarch, "MAUL"),)
+PREMIUM = (
+    ("HAYMAKER", haymaker, "ANVIL"),
+    ("BASTION", bastion, "BULWARK"),
+    ("SPECTRE", spectre, "LANCE"),
+    ("RONIN", ronin, "RAZOR"),
+    ("MONARCH", monarch, "MAUL"),
+)
 
 SHEETS = {
     "attacks": ("side", ["Stance", "Guard", "JabChamber", "JabStrike", "StraightChamber", "StraightStrike"]),
@@ -157,50 +167,65 @@ def worn_previews(anvil_robot, out, engine):
     preview_frames.lineup(fighting, os.path.join(out, "worn_stance.png"), "three")
 
 
-def premium_previews(anvil_robot, out):
-    """Concept renders of the premium bodies, each beside the free frame of its chassis: a hero shot, and the two at rest,
-    in the fighting stance and mid-strike. Prints the same numbers and reach checks as the frames."""
+def premium_previews(anvil_robot, out, only=None):
+    """Concept renders of the premium bodies: each beside the free frame of its chassis (at rest, in the fighting stance
+    and mid-strike) with a hero shot, and all of them side by side in one lineup. Prints each body's numbers, and how far
+    each of its strikes reaches beside its chassis' frame. `only` (a set of labels) limits the pairs and hero shots to
+    those bodies."""
     scales = {label: scale for label, _module, scale in FRAMES}
     modules = {label: module for label, module, _scale in FRAMES}
-    for label, module, base in PREMIUM:
-        pair = []
-        for name, mod in ((base, modules[base]), (label, module)):
-            robot = anvil_robot if mod is anvil else mod.build()
+    built = {}
+
+    def frame(name, module):
+        if name not in built:
+            robot = anvil_robot if module is anvil else module.build()
             preview.hide_originals(robot)
-            pair.append((name, robot, mod.ROLES))
+            built[name] = (robot, pose_library.finalize(robot))
+        return built[name]
+
+    everyone = []
+    for label, module, base in PREMIUM:
+        robot, poses = frame(label, module)
         scale = scales[base]
-        standing, fighting, striking = [], [], []
-        for name, robot, roles in pair:
-            mats = preview_frames.materials(roles, name)
-            poses = pose_library.finalize(robot)
-            low, high = preview_frames.bounds(robot)
-            print(
-                "frame %-8s %3d parts, %5d triangles, %.2f wide, %.2f tall, %.2f deep; lowest in Stance y = %.3f"
-                % (
-                    name,
-                    len(robot.parts),
-                    sum(part.triangles for part in robot.parts),
-                    high.x - low.x,
-                    high.y - low.y,
-                    high.z - low.z,
-                    preview_frames.lowest(robot, poses["Stance"]),
-                )
+        everyone.append((label, robot, preview_frames.materials(module.ROLES, label), poses["Stance"], scale))
+        if only is not None and label not in only:
+            continue
+        base_robot, base_poses = frame(base, modules[base])
+        low, high = preview_frames.bounds(robot)
+        print(
+            "frame %-8s %3d parts, %5d triangles, %.2f wide, %.2f tall, %.2f deep; lowest in Stance y = %.3f"
+            % (
+                label,
+                len(robot.parts),
+                sum(part.triangles for part in robot.parts),
+                high.x - low.x,
+                high.y - low.y,
+                high.z - low.z,
+                preview_frames.lowest(robot, poses["Stance"]),
             )
-            for move, hand, needed in REACH_CHECKS:
-                reach = robotlib.front_extent(robot, poses[move], hand)
-                if reach < needed:
-                    print("  reach %-15s %s %.2f studs, short of %.2f" % (move, hand, reach, needed))
-            standing.append((name, robot, mats, {"pos": (0, 0, 0), "rot": {}}, scale))
-            fighting.append((name, robot, mats, poses["Stance"], scale))
-            striking.append((name, robot, mats, poses["StraightStrike"], scale))
+        )
+        reaches = []
+        for move, joint, _needed in REACH_CHECKS:
+            mine = robotlib.front_extent(robot, poses[move], joint)
+            theirs = robotlib.front_extent(base_robot, base_poses[move], joint)
+            reaches.append("%s %.2f%s" % (move, mine - theirs, " SHORT" if mine < theirs - 0.03 else ""))
+        print("  reach against %s: %s" % (base, ", ".join(reaches)))
+        standing, fighting, striking = [], [], []
+        for name, each, each_poses, roles in (
+            (base, base_robot, base_poses, modules[base].ROLES),
+            (label, robot, poses, module.ROLES),
+        ):
+            mats = preview_frames.materials(roles, name)
+            standing.append((name, each, mats, {"pos": (0, 0, 0), "rot": {}}, scale))
+            fighting.append((name, each, mats, each_poses["Stance"], scale))
+            striking.append((name, each, mats, each_poses["StraightStrike"], scale))
         stem = os.path.join(out, "premium_%s" % label.lower())
         preview_frames.lineup(standing, stem + "_front.png", "front", spacing=7.2, size=(1800, 1050))
         preview_frames.lineup(fighting, stem + "_stance.png", "three", spacing=7.2, size=(1800, 1050))
         preview_frames.lineup(striking, stem + "_strike.png", "side", spacing=8.0, size=(1800, 1050))
-        name, robot, roles = pair[1]
-        stance = pose_library.finalize(robot)["Stance"]
-        mats = preview_frames.materials(roles, name + "hero")
-        preview_frames.hero(robot, mats, stance, stem + "_hero.png", tuple(roles["Trim"]["color"]), scale)
+        mats = preview_frames.materials(module.ROLES, label + "hero")
+        preview_frames.hero(robot, mats, poses["Stance"], stem + "_hero.png", tuple(module.ROLES["Trim"]["color"]), scale)
+    preview_frames.lineup(everyone, os.path.join(out, "premium_lineup.png"), "three", spacing=6.8, size=(3200, 1100))
 
 
 def frame_previews(anvil_robot, out):
@@ -319,7 +344,8 @@ def main():
         return
     if options.previews == "premium":
         preview_frames.setup(options.engine)
-        premium_previews(robot, out)
+        only = set(options.frames.upper().split(",")) if options.frames else None
+        premium_previews(robot, out, only)
         return
     preview.setup_scene(options.engine)
     materials = preview.role_materials(anvil.ROLES, TEAM_BLUE)

@@ -252,6 +252,206 @@
       ]
     },
     {
+      "name": "Haymaker",
+      "className": "Folder",
+      "children": [
+        {
+          "name": "BRUSHED",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://115586410695534",
+            "NormalMap": "rbxassetid://111863914010107",
+            "MetalnessMap": "rbxassetid://75913894789948",
+            "RoughnessMap": "rbxassetid://104900667783502"
+          }
+        },
+        {
+          "name": "MATTE",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://115586410695534",
+            "NormalMap": "rbxassetid://111863914010107",
+            "MetalnessMap": "rbxassetid://82420650559116",
+            "RoughnessMap": "rbxassetid://126637868608937"
+          }
+        },
+        {
+          "name": "CHROME",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://115586410695534",
+            "NormalMap": "rbxassetid://111863914010107",
+            "MetalnessMap": "rbxassetid://129245368737256",
+            "RoughnessMap": "rbxassetid://125777262555952"
+          }
+        },
+        {
+          "name": "GLOSS",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://115586410695534",
+            "NormalMap": "rbxassetid://111863914010107",
+            "MetalnessMap": "rbxassetid://128953893279863",
+            "RoughnessMap": "rbxassetid://111286006903426"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Bastion",
+      "className": "Folder",
+      "children": [
+        {
+          "name": "BRUSHED",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://89707364229254",
+            "NormalMap": "rbxassetid://105006368409309",
+            "MetalnessMap": "rbxassetid://140427969178259",
+            "RoughnessMap": "rbxassetid://78928908113985"
+          }
+        },
+        {
+          "name": "MATTE",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://89707364229254",
+            "NormalMap": "rbxassetid://105006368409309",
+            "MetalnessMap": "rbxassetid://116647061526114",
+            "RoughnessMap": "rbxassetid://119978893749318"
+          }
+        },
+        {
+          "name": "CHROME",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://89707364229254",
+            "NormalMap": "rbxassetid://105006368409309",
+            "MetalnessMap": "rbxassetid://135782535099163",
+            "RoughnessMap": "rbxassetid://130514642687746"
+          }
+        },
+        {
+          "name": "GLOSS",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://89707364229254",
+            "NormalMap": "rbxassetid://105006368409309",
+            "MetalnessMap": "rbxassetid://103106961998821",
+            "RoughnessMap": "rbxassetid://130387008768113"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Spectre",
+      "className": "Folder",
+      "children": [
+        {
+          "name": "BRUSHED",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://72644516457633",
+            "NormalMap": "rbxassetid://116103241017583",
+            "MetalnessMap": "rbxassetid://120579948525240",
+            "RoughnessMap": "rbxassetid://123033619317784"
+          }
+        },
+        {
+          "name": "MATTE",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://72644516457633",
+            "NormalMap": "rbxassetid://116103241017583",
+            "MetalnessMap": "rbxassetid://124979901777214",
+            "RoughnessMap": "rbxassetid://103286202015640"
+          }
+        },
+        {
+          "name": "CHROME",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://72644516457633",
+            "NormalMap": "rbxassetid://116103241017583",
+            "MetalnessMap": "rbxassetid://77010800123961",
+            "RoughnessMap": "rbxassetid://110981793234057"
+          }
+        },
+        {
+          "name": "GLOSS",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://72644516457633",
+            "NormalMap": "rbxassetid://116103241017583",
+            "MetalnessMap": "rbxassetid://96813371842532",
+            "RoughnessMap": "rbxassetid://76989057842096"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Ronin",
+      "className": "Folder",
+      "children": [
+        {
+          "name": "BRUSHED",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://128356467606196",
+            "NormalMap": "rbxassetid://134394081573134",
+            "MetalnessMap": "rbxassetid://140174110240990",
+            "RoughnessMap": "rbxassetid://86099270067229"
+          }
+        },
+        {
+          "name": "MATTE",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://128356467606196",
+            "NormalMap": "rbxassetid://134394081573134",
+            "MetalnessMap": "rbxassetid://106682905887241",
+            "RoughnessMap": "rbxassetid://92358585558512"
+          }
+        },
+        {
+          "name": "CHROME",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://128356467606196",
+            "NormalMap": "rbxassetid://134394081573134",
+            "MetalnessMap": "rbxassetid://108878832656969",
+            "RoughnessMap": "rbxassetid://135054707196097"
+          }
+        },
+        {
+          "name": "GLOSS",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://128356467606196",
+            "NormalMap": "rbxassetid://134394081573134",
+            "MetalnessMap": "rbxassetid://80990185312121",
+            "RoughnessMap": "rbxassetid://79904245019226"
+          }
+        }
+      ]
+    },
+    {
       "name": "Monarch",
       "className": "Folder",
       "children": [
