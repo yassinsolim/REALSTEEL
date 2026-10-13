@@ -24,6 +24,7 @@ import exporters  # noqa: E402
 import kits  # noqa: E402
 import lance  # noqa: E402
 import maul  # noqa: E402
+import monarch  # noqa: E402
 import poses as pose_library  # noqa: E402
 import preview  # noqa: E402
 import preview_frames  # noqa: E402
@@ -36,6 +37,9 @@ TEAM_BLUE = (0.12, 0.42, 1.0)
 
 # The five free frames: label, module, the chassis' scale in game (keep in step with Loadout.luau).
 FRAMES = (("ANVIL", anvil, 1.0), ("BULWARK", bulwark, 1.08), ("LANCE", lance, 1.1), ("RAZOR", razor, 0.94), ("MAUL", maul, 1.06))
+
+# The premium bodies: label, module, the free frame of the chassis it is for (it takes that chassis' scale and stats).
+PREMIUM = (("MONARCH", monarch, "MAUL"),)
 
 SHEETS = {
     "attacks": ("side", ["Stance", "Guard", "JabChamber", "JabStrike", "StraightChamber", "StraightStrike"]),
@@ -65,7 +69,9 @@ def parse():
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default="art/build")
     parser.add_argument("--luau", default="")
-    parser.add_argument("--previews", default="none", choices=["none", "rest", "poses", "all", "kits", "frames", "worn"])
+    parser.add_argument(
+        "--previews", default="none", choices=["none", "rest", "poses", "all", "kits", "frames", "worn", "premium"]
+    )
     parser.add_argument("--sheets", default="")
     parser.add_argument("--frames", default="", help="comma-separated frame labels to export (default: all)")
     parser.add_argument("--engine", default="WORKBENCH", choices=["WORKBENCH", "EEVEE"])
@@ -96,8 +102,16 @@ def kit_previews(robot, out, sheets, poses):
     steel = preview_kits.palette_materials(STEEL, BLUE)
     if "crests" in wanted:
         entries = [(name, {"kits": [name], "materials": steel}) for name in kits.CRESTS]
+        count = len(entries)
         preview_kits.sheet(
-            robot, entries, os.path.join(out, "kits_crests.png"), "front", 3.4, (1800, 700), center_y=6.0, ortho=15
+            robot,
+            entries,
+            os.path.join(out, "kits_crests.png"),
+            "front",
+            3.4,
+            (450 * count, 700),
+            center_y=6.0,
+            ortho=3.4 * count + 1.4,
         )
     if "looks" in wanted:
         cyan = (0.25, 0.85, 1.0)
@@ -141,6 +155,52 @@ def worn_previews(anvil_robot, out, engine):
         preview_frames.hero(robot, mats, stance, os.path.join(out, "worn_%s.png" % label.lower()), accent, scale)
         fighting.append((label, robot, mats, stance, scale))
     preview_frames.lineup(fighting, os.path.join(out, "worn_stance.png"), "three")
+
+
+def premium_previews(anvil_robot, out):
+    """Concept renders of the premium bodies, each beside the free frame of its chassis: a hero shot, and the two at rest,
+    in the fighting stance and mid-strike. Prints the same numbers and reach checks as the frames."""
+    scales = {label: scale for label, _module, scale in FRAMES}
+    modules = {label: module for label, module, _scale in FRAMES}
+    for label, module, base in PREMIUM:
+        pair = []
+        for name, mod in ((base, modules[base]), (label, module)):
+            robot = anvil_robot if mod is anvil else mod.build()
+            preview.hide_originals(robot)
+            pair.append((name, robot, mod.ROLES))
+        scale = scales[base]
+        standing, fighting, striking = [], [], []
+        for name, robot, roles in pair:
+            mats = preview_frames.materials(roles, name)
+            poses = pose_library.finalize(robot)
+            low, high = preview_frames.bounds(robot)
+            print(
+                "frame %-8s %3d parts, %5d triangles, %.2f wide, %.2f tall, %.2f deep; lowest in Stance y = %.3f"
+                % (
+                    name,
+                    len(robot.parts),
+                    sum(part.triangles for part in robot.parts),
+                    high.x - low.x,
+                    high.y - low.y,
+                    high.z - low.z,
+                    preview_frames.lowest(robot, poses["Stance"]),
+                )
+            )
+            for move, hand, needed in REACH_CHECKS:
+                reach = robotlib.front_extent(robot, poses[move], hand)
+                if reach < needed:
+                    print("  reach %-15s %s %.2f studs, short of %.2f" % (move, hand, reach, needed))
+            standing.append((name, robot, mats, {"pos": (0, 0, 0), "rot": {}}, scale))
+            fighting.append((name, robot, mats, poses["Stance"], scale))
+            striking.append((name, robot, mats, poses["StraightStrike"], scale))
+        stem = os.path.join(out, "premium_%s" % label.lower())
+        preview_frames.lineup(standing, stem + "_front.png", "front", spacing=7.2, size=(1800, 1050))
+        preview_frames.lineup(fighting, stem + "_stance.png", "three", spacing=7.2, size=(1800, 1050))
+        preview_frames.lineup(striking, stem + "_strike.png", "side", spacing=8.0, size=(1800, 1050))
+        name, robot, roles = pair[1]
+        stance = pose_library.finalize(robot)["Stance"]
+        mats = preview_frames.materials(roles, name + "hero")
+        preview_frames.hero(robot, mats, stance, stem + "_hero.png", tuple(roles["Trim"]["color"]), scale)
 
 
 def frame_previews(anvil_robot, out):
@@ -198,13 +258,16 @@ def discard_robot(robot):
 
 
 def export_frames(out, luau, only=None):
-    """Every frame in turn: worn textures baked onto its UV atlas, then its FBX and rig JSON with the same UVs. One frame
-    is in the scene at a time, so every frame's parts keep their plain names (Chest_Armor, not Chest_Armor.001). `only`
-    (a set of frame labels) limits the textures and FBX to those frames; every frame still goes into the rig module.
-    Returns the rigs for the Luau module as [(robot, roles)] and ANVIL's poses for the clips."""
+    """Every frame in turn, the free ones and then the premium bodies: worn textures baked onto its UV atlas, then its FBX
+    and rig JSON with the same UVs. One frame is in the scene at a time, so every frame's parts keep their plain names
+    (Chest_Armor, not Chest_Armor.001). `only` (a set of frame labels) limits the textures and FBX to those frames; every
+    frame still goes into the rig module. Returns the rigs for the Luau module as [(robot, roles)] and ANVIL's poses for
+    the clips."""
     rigs = []
     poses = None
-    for label, module, _scale in FRAMES:
+    everything = [(label, module) for label, module, _scale in FRAMES]
+    everything += [(label, module) for label, module, _base in PREMIUM]
+    for label, module in everything:
         robot = module.build()
         print("frame %-8s %3d parts, %5d triangles" % (label, len(robot.parts), sum(part.triangles for part in robot.parts)))
         robot_poses = pose_library.finalize(robot)
@@ -253,6 +316,10 @@ def main():
     if options.previews == "frames":
         preview_frames.setup(options.engine)
         frame_previews(robot, out)
+        return
+    if options.previews == "premium":
+        preview_frames.setup(options.engine)
+        premium_previews(robot, out)
         return
     preview.setup_scene(options.engine)
     materials = preview.role_materials(anvil.ROLES, TEAM_BLUE)

@@ -139,6 +139,47 @@ class PartBuilder:
             vert.co = Vector((vert.co.x * scale[0], vert.co.y * scale[1], vert.co.z * scale[2])) + Vector(center)
         self._merge(tmp)
 
+    def pod(self, center, size, roundness=(0.5, 0.5), segments=(28, 14), taper_x=(1.0, 1.0), taper_z=(1.0, 1.0),
+            rot=None):
+        """A superellipsoid, the smooth rounded shell the premium bodies are made of. size is its full extent (x, y, z).
+        roundness is (top to bottom, around) exponents: 1 is an ellipsoid, 0.5 a soft pillow, toward 0.2 a box with
+        rounded edges. taper_x and taper_z scale the width and the depth at the top and at the bottom, linearly in
+        between, so a shell can flare. segments is (around, top to bottom)."""
+        def power(value, exponent):
+            return math.copysign(abs(value) ** exponent, value)
+
+        tmp = bmesh.new()
+        around, rings = segments
+        vertical, horizontal = roundness
+        cx, cy, cz = center
+        hx, hy, hz = size[0] / 2, size[1] / 2, size[2] / 2
+        bottom = tmp.verts.new((cx, cy - hy, cz))
+        top = tmp.verts.new((cx, cy + hy, cz))
+        rows = []
+        for ring in range(1, rings):
+            latitude = -math.pi / 2 + math.pi * ring / rings
+            spread = power(math.cos(latitude), vertical)
+            rise = power(math.sin(latitude), vertical)
+            height = (rise + 1) / 2
+            wide = taper_x[1] + (taper_x[0] - taper_x[1]) * height
+            deep = taper_z[1] + (taper_z[0] - taper_z[1]) * height
+            row = []
+            for step in range(around):
+                longitude = -math.pi + 2 * math.pi * step / around
+                x = hx * spread * power(math.cos(longitude), horizontal) * wide
+                z = hz * spread * power(math.sin(longitude), horizontal) * deep
+                row.append(tmp.verts.new((cx + x, cy + hy * rise, cz + z)))
+            rows.append(row)
+        for step in range(around):
+            nxt = (step + 1) % around
+            tmp.faces.new((bottom, rows[0][nxt], rows[0][step]))
+            tmp.faces.new((top, rows[-1][step], rows[-1][nxt]))
+            for ring in range(len(rows) - 1):
+                tmp.faces.new((rows[ring][step], rows[ring][nxt], rows[ring + 1][nxt], rows[ring + 1][step]))
+        bmesh.ops.recalc_face_normals(tmp, faces=tmp.faces[:])
+        self._rotate(tmp, center, rot)
+        self._merge(tmp)
+
     def finish(self, smooth=False):
         bm = self.bm
         bmesh.ops.triangulate(bm, faces=bm.faces[:])

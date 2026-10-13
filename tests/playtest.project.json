@@ -18,7 +18,8 @@
         "LayoutSpec": { "$path": "LayoutSpec.luau" },
         "StandingsSpec": { "$path": "StandingsSpec.luau" },
         "HoistSpec": { "$path": "HoistSpec.luau" },
-        "RecordsSpec": { "$path": "RecordsSpec.luau" }
+        "RecordsSpec": { "$path": "RecordsSpec.luau" },
+        "WalletSpec": { "$path": "WalletSpec.luau" }
       }
     },
     "ServerScriptService": {

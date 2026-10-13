@@ -1,9 +1,10 @@
 --!strict
 
--- The cosmetic side of the garage: paint, finishes and head crests, how a look travels as one number, which add-on kits
--- a loadout and a look put on the robot, and how the two fighters' colors are kept apart on screen. Pure data and
--- arithmetic like Loadout (colors are plain 0-255 numbers, not Color3), so it runs anywhere and can be tested without
--- Roblox. Nothing here changes how a fight plays.
+-- The cosmetic side of the garage: paint, finishes, head crests and premium bodies, how a look travels as one number,
+-- which robot frame and add-on kits a loadout and a look put on the robot, and how the two fighters' colors are kept apart
+-- on screen. Pure data and arithmetic like Loadout (colors are plain 0-255 numbers, not Color3), so it runs anywhere and
+-- can be tested without Roblox. Nothing here changes how a fight plays. Some crests and every premium body are shop items
+-- (see Shop); the server only lets a player wear the ones they own (see `strip`).
 
 local Loadout = require(script.Parent.Loadout)
 
@@ -19,12 +20,22 @@ export type Finish = {
 	reflectance: number,
 }
 
+-- A body a chassis can be drawn as. The first is every chassis' own frame; the others are premium bodies, each for one
+-- chassis, drawn as another frame on the same skeleton and unlocked by a shop item.
+export type Body = {
+	name: string,
+	chassis: number?,
+	frame: string?,
+	item: string?,
+}
+
 -- Every choice is a position in one of the lists below, counted from 1. Position 1 is the default.
 export type Look = {
 	armor: number,
 	accent: number,
 	finish: number,
 	crest: number,
+	body: number,
 }
 
 export type Resolved = {
@@ -89,13 +100,20 @@ Looks.Finishes = {
 	{ name = "GLOSS", material = "Plastic", reflectance = 0.15 },
 } :: { Finish }
 
--- The head crests: the first is none, and each of the others is a kit in RobotKits.
-Looks.Crests = { "NONE", "FIN", "ANTENNA", "HORNS", "HALO" }
-Looks.CrestKits = { "", "CrestFin", "CrestAntenna", "CrestHorns", "CrestHalo" }
+-- The head crests: the first is none, and each of the others is a kit in RobotKits. A crest with an item in CrestItems is
+-- bought in the shop; the rest are everyone's.
+Looks.Crests = { "NONE", "FIN", "ANTENNA", "HORNS", "HALO", "CROWN", "MOHAWK" }
+Looks.CrestKits = { "", "CrestFin", "CrestAntenna", "CrestHorns", "CrestHalo", "CrestCrown", "CrestMohawk" }
+Looks.CrestItems = { "", "", "", "", "", "crest.crown", "crest.mohawk" }
 
 -- The robot each chassis is drawn as, by frame name in RobotRigs. Every frame is built on the same skeleton, so they all
 -- play the same animations.
 Looks.Frames = { "Anvil", "Bulwark", "Lance", "Razor", "Maul" }
+
+Looks.Bodies = {
+	{ name = "STOCK" },
+	{ name = "MONARCH", chassis = 5, frame = "Monarch", item = "body.monarch" },
+} :: { Body }
 
 -- The distance in RGB below which two colors are too alike to tell fighters apart.
 local ARMOR_CLASH = 70
@@ -109,7 +127,7 @@ local function clampIndex(value: unknown, count: number): number
 end
 
 function Looks.default(): Look
-	return { armor = 1, accent = 1, finish = 1, crest = 1 }
+	return { armor = 1, accent = 1, finish = 1, crest = 1, body = 1 }
 end
 
 -- Whatever a client or a save file says, as a valid look.
@@ -120,16 +138,19 @@ function Looks.sanitize(raw: unknown): Look
 		accent = clampIndex(source.accent, #Looks.Accents),
 		finish = clampIndex(source.finish, #Looks.Finishes),
 		crest = clampIndex(source.crest, #Looks.Crests),
+		body = clampIndex(source.body, #Looks.Bodies),
 	}
 end
 
 function Looks.codeCount(): number
-	return #Looks.Armor * #Looks.Accents * #Looks.Finishes * #Looks.Crests
+	return #Looks.Bodies * #Looks.Armor * #Looks.Accents * #Looks.Finishes * #Looks.Crests
 end
 
--- A look travels as one number from 1, the same way a loadout does.
+-- A look travels as one number from 1, the same way a loadout does. (Saves keep each choice on its own, so the codes may
+-- change as the lists grow.)
 function Looks.encode(look: Look): number
-	local index = (look.armor - 1) * #Looks.Accents + (look.accent - 1)
+	local index = (look.body - 1) * #Looks.Armor + (look.armor - 1)
+	index = index * #Looks.Accents + (look.accent - 1)
 	index = index * #Looks.Finishes + (look.finish - 1)
 	index = index * #Looks.Crests + (look.crest - 1)
 	return 1 + index
@@ -144,21 +165,73 @@ function Looks.decode(code: unknown): Look
 		return Looks.default()
 	end
 	local rest = (code :: number) - 1
-	local crests, finishes, accents = #Looks.Crests, #Looks.Finishes, #Looks.Accents
+	local crests, finishes, accents, armors = #Looks.Crests, #Looks.Finishes, #Looks.Accents, #Looks.Armor
 	local crest = rest % crests
 	rest = (rest - crest) / crests
 	local finish = rest % finishes
 	rest = (rest - finish) / finishes
 	local accent = rest % accents
-	local armor = (rest - accent) / accents
-	return { armor = armor + 1, accent = accent + 1, finish = finish + 1, crest = crest + 1 }
+	rest = (rest - accent) / accents
+	local armor = rest % armors
+	local body = (rest - armor) / armors
+	return { armor = armor + 1, accent = accent + 1, finish = finish + 1, crest = crest + 1, body = body + 1 }
 end
 
--- The look a bot wears: its team colors, with a crest picked from the seed so the bots are not all the same robot.
+-- The look a bot wears: its team colors, with one of everyone's crests picked from the seed so the bots are not all the
+-- same robot.
 function Looks.botLook(seed: number): Look
 	local look = Looks.default()
-	look.crest = math.abs(math.floor(seed * 3)) % #Looks.Crests + 1
+	local free: { number } = {}
+	for index, item in Looks.CrestItems do
+		if item == "" then
+			table.insert(free, index)
+		end
+	end
+	look.crest = free[math.abs(math.floor(seed * 3)) % #free + 1]
 	return look
+end
+
+-- The shop item a crest or a body needs, or nil for one everyone has.
+function Looks.crestItem(crest: number): string?
+	local item = Looks.CrestItems[crest]
+	return if item ~= nil and item ~= "" then item else nil
+end
+
+function Looks.bodyItem(body: number): string?
+	local entry = Looks.Bodies[body]
+	return if entry ~= nil then entry.item else nil
+end
+
+-- The look with any crest or body its wearer does not own taken off.
+function Looks.strip(look: Look, owns: (item: string) -> boolean): Look
+	local crestItem = Looks.crestItem(look.crest)
+	local bodyItem = Looks.bodyItem(look.body)
+	return {
+		armor = look.armor,
+		accent = look.accent,
+		finish = look.finish,
+		crest = if crestItem ~= nil and not owns(crestItem) then 1 else look.crest,
+		body = if bodyItem ~= nil and not owns(bodyItem) then 1 else look.body,
+	}
+end
+
+-- The body a shop item unlocks, and the crest; nil when it is not one.
+function Looks.bodyFor(item: string): number?
+	for index, body in Looks.Bodies do
+		if body.item == item then
+			return index
+		end
+	end
+	return nil
+end
+
+function Looks.crestFor(item: string): number?
+	for index, crestItem in Looks.CrestItems do
+		if crestItem == item then
+			return index
+		end
+	end
+	return nil
 end
 
 -- The kits to draw for a loadout and a look: the crest. (A chassis is a frame of its own; see frameFor.)
@@ -167,8 +240,13 @@ function Looks.kitsFor(_choice: Loadout.Choice, look: Look): { string }
 	return if crest ~= nil and crest ~= "" then { crest } else {}
 end
 
--- The frame (a robot in RobotRigs) a loadout is drawn as with a look.
-function Looks.frameFor(choice: Loadout.Choice, _look: Look): string
+-- The frame (a robot in RobotRigs) a loadout is drawn as with a look: the chassis' own, or the premium body the look
+-- picks when that body is for this chassis.
+function Looks.frameFor(choice: Loadout.Choice, look: Look): string
+	local body = Looks.Bodies[look.body]
+	if body ~= nil and body.frame ~= nil and body.chassis == choice.chassis then
+		return body.frame
+	end
 	return Looks.Frames[choice.chassis] or Looks.Frames[1]
 end
 

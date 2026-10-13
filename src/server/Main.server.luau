@@ -4,6 +4,7 @@
 -- in the hall and the line for the rings (see Rings).
 
 local Players = game:GetService("Players")
+local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
@@ -13,6 +14,7 @@ local Garage = require(script.Parent.Garage)
 local Records = require(script.Parent.Records)
 local RobotLibrary = require(script.Parent.RobotLibrary)
 local Rings = require(script.Parent.Rings)
+local Wallet = require(script.Parent.Wallet)
 local WorldBuilder = require(script.Parent.WorldBuilder)
 
 local MENU_COOLDOWN = 0.2
@@ -40,16 +42,33 @@ menu.Parent = ReplicatedStorage
 
 -- A garage change reaches the fighters when the player's next session in a ring starts, so there is nothing to do here.
 local garage = Garage.new(function() end)
--- Every finished bot match and 1v1 goes on its players' records, and 1v1s decide the champion (see Records).
+-- Coins and shop items (see Wallet). What a player owns decides what their garage may put on their robot, and a
+-- purchase shows on it at once.
+local wallet = Wallet.new(function(player: Player)
+	garage.refresh(player)
+end)
+garage.setOwnership(wallet.owns)
+MarketplaceService.ProcessReceipt = wallet.processReceipt
+-- Every finished bot match and 1v1 goes on its players' records, and 1v1s decide the champion (see Records); it pays
+-- them coins too.
 local records = Records.new(state)
 local rings = Rings.new(world, garage, state, function(mode: string, level: number, owners, winner: number)
 	records.matchEnded({ mode = mode, level = level, owners = owners, winner = winner })
+	wallet.matchEnded(mode, level, owners, winner)
 end)
 game:BindToClose(function()
 	-- Matches already won are reported and nothing after, so the players the shutdown removes forfeit nothing; only then
-	-- is everything written.
+	-- is everything written, records and wallets side by side.
 	rings.close()
+	local walletsSaved = false
+	task.spawn(function()
+		wallet.saveAll()
+		walletsSaved = true
+	end)
 	records.saveAll()
+	while not walletsSaved do
+		task.wait(0.2)
+	end
 end)
 
 -- Every player gets a bay for their robot. With more players than bays, the latecomers simply have none.
@@ -81,6 +100,7 @@ end
 local lastRequest: { [Player]: number } = {}
 
 local function added(player: Player)
+	wallet.add(player)
 	garage.add(player)
 	records.add(player)
 	InputSetup.build(player)
@@ -98,6 +118,7 @@ Players.PlayerRemoving:Connect(function(player: Player)
 	rings.remove(player)
 	freeBay(player)
 	records.remove(player)
+	wallet.remove(player)
 	garage.remove(player)
 end)
 for _, player in Players:GetPlayers() do

@@ -5,7 +5,8 @@ on Roblox's server authority mode (client prediction, rollback and resimulation)
 
 Fighters are five original robots modeled in Blender, one for each chassis (ANVIL, BULWARK, LANCE, RAZOR and MAUL), built
 on one skeleton, finished in worn painted metal and animated from the simulation state. Every player fits a robot out in
-the garage: a chassis, a module each for arms, core and legs, and a paint job. There are four attacks (a punch and a kick
+the garage: a chassis, a module each for arms, core and legs, and a paint job, and can buy a premium body (MONARCH, for
+MAUL) with Robux or crests with the coins every match pays. There are four attacks (a punch and a kick
 for each side), guard and dash, best-of-three rounds with a clock, a computer opponent at three levels, 1v1 versus, a
 training mode with a frame meter, and touch controls. Players walk around
 THE FOUNDRY, a robot fight club hall with the main ring in its middle, two practice pits beside it, everyone's robots in
@@ -126,6 +127,7 @@ and on block, both in the unit checks and live in Studio.
 | Winches | `src/shared/Hoist.luau`; `src/client/Cranes.luau` | Pure: how high each ring's robots hang from their winches and where the hooks are, from the ring's match phase and frame; the client draws the cables and hooks. See The Foundry. |
 | Robot art | `art/`, `scripts/art.ps1` | Blender (headless) builds the five robot frames and their worn-metal textures, exports the FBX, and generates `src/shared/RobotRigs.luau`, `RobotClips.luau` and `RobotKits.luau`; the textures are wired up in `RobotWear.model.json`. See Robot art and animation. |
 | Garage | `src/shared/Loadout.luau`, `Looks.luau`, `RobotKits.luau`; `src/server/Garage.luau`; `src/client/GaragePanel.luau` | Chassis, modules and paint as small integer codes, the stats they derive, the frame and crest each is drawn with, the server's profile and the screen. See The garage. |
+| Shop | `src/shared/Shop.luau`; `src/server/Wallet.luau`; `scripts/products.ps1` | The cosmetic catalog and the coins matches pay; each player's coins and owned items, Robux receipts and coin purchases; the developer products. See The shop. |
 | Animation | `src/shared/RobotSkeleton.luau`, `RobotAnimator.luau` | Pure Luau forward kinematics, clip sampling, and the mapping from simulation state to a pose. |
 | Presentation | `src/client/` | Draws and poses the robots in every ring (`FighterView`, `RobotRig`, and `Bays` for the robots in the garage bays), the camera (`CameraRig`), hit effects (`Effects`), sound (`Sfx`), HUD (`Hud`), the hall's PLAY button and line status (`LobbyHud`), the scoreboards over the rings (`Jumbotron`), the winches' cables and hooks (`Cranes`), the champion's statue (`Statue`) and the leaderboards (`Leaderboards`), menu (`Menu`), garage (`GaragePanel`), training overlay, touch controls, smoothing of rollback corrections. |
 
@@ -345,8 +347,9 @@ the leaderboards). Next comes the economy.
 
 **GARAGE** (on the PLAY card, or E at your bay) opens a panel beside your robot in its bay, which turns in a slow close-up
 and wears every change at once. Everything that changes how a fight plays is a sidegrade, a gain with a cost, and open to
-everyone, so a build is a choice and not a rank. What a robot looks like is the part meant to be earned or bought later;
-nothing is gated yet.
+everyone, so a build is a choice and not a rank. What a robot looks like is the part that is earned or bought: the SHOP
+sells premium bodies for Robux and crests for coins, which every match pays (see The shop below). Nothing for sale changes
+a fight.
 
 | Chassis | Role | Gives | Costs |
 | --- | --- | --- | --- |
@@ -368,24 +371,28 @@ nothing is gated yet.
 That is 5 x 3 x 3 x 3 = 135 builds, and ten ready-made ones, two per chassis, for a player who does not want to choose: STEEL
 WALL, CLEAN HANDS, BREAKWATER, IRON CURTAIN, SKIRMISHER, SNIPER, SHREDDER, GHOST, WRECKER and BRAWLER. Paint is 16 armor
 colors and 16 accent colors (the first of each is the side's own team color), four finishes (BRUSHED, MATTE, CHROME, GLOSS) and
-five head crests (none, FIN, ANTENNA, HORNS, HALO). The opponent never wears colors too close to yours: `Looks.resolve` falls
-back to its team colors.
+seven head crests (none, FIN, ANTENNA, HORNS and HALO for everyone, CROWN and MOHAWK from the shop). The opponent never wears
+colors too close to yours: `Looks.resolve` falls back to its team colors.
 
 - **How a build travels.** `Loadout.encode` turns a choice into one integer (1 to 135) that the server sets on each fighter's
   `Core` as the attribute `Loadout`. `Simulation` derives `fighter.stats` from it (`Loadout.stats`, built once per code), and
   the sim, `FrameData`, the animator and the bot all read those stats instead of global constants, so the server and every
   predicting client play identical numbers and a rollback with different builds stays deterministic. A stock ANVIL plays
-  exactly as it did before the garage existed. A look is one integer (1 to 5120) on the fighter's model, the attribute `Look`.
-- **The server.** `src/server/Garage.luau` owns the `Garage` remote. A client sends its whole garage (`"set"` and the eight
+  exactly as it did before the garage existed. A look is one integer (1 to 14336) on the fighter's model, the attribute
+  `Look`: the body, the paint, the finish and the crest. Saves keep each choice on its own, so the code may change as the
+  lists grow.
+- **The server.** `src/server/Garage.luau` owns the `Garage` remote. A client sends its whole garage (`"set"` and the nine
   choices); the server sanitizes every number, accepts one request per 0.1 s per player, publishes the result on the player
   (`GarageLoadout`, `GarageLook`), and saves it to the DataStore `RealSteelGarage1` (batched, at most every 15 s, and when the
-  player leaves or the server shuts down). It loads the saved garage when the player joins. A change reaches the fighter
+  player leaves or the server shuts down). A pick of a shop item the player does not own is kept, so it goes on the moment
+  they buy it, but what is published and what their fighter wears leave it off (`Looks.strip`). It loads the saved garage
+  when the player joins. A change reaches the fighter
   when the player's next turn in the ring starts, so a match in progress keeps its robots. The bots take theirs from
   `Loadout.botChoice`: EASY the stock ANVIL, MEDIUM a random stock chassis, HARD a random ready-made build. Where DataStores
   are unreachable (an unpublished place without Studio API access) saving is off, with one warning, and the garage still
   works for the session.
-- **The screen.** `GaragePanel` and `GarageWidgets` have three pages: BUILD (five rating bars, then the chassis and each
-  module, with its gains as solid green dots and its costs as red rings), PRESETS and PAINT. The panel is a column beside
+- **The screen.** `GaragePanel` and `GarageWidgets` have four pages: BUILD (five rating bars, then the chassis and each
+  module, with its gains as solid green dots and its costs as red rings), PRESETS, PAINT and SHOP. The panel is a column beside
   the robot on wide views, a sheet along the bottom on tall narrow ones, and tighter on touch. The robot wears each pick at
   once; the panel sends it at most every 0.2 s and keeps asking until the server's published copy matches, giving up after
   4 s. `CameraRig` has a garage mode that sways a little around the robot's front with a lens shift, so the robot stands in
@@ -393,7 +400,7 @@ back to its team colors.
 - **Frames and crests.** Each chassis is drawn as its own robot, a frame (see Robot art and animation), a little larger or
   smaller (`scale`; the hit circle does not change), and swaps in place when the chassis changes. Modules change numbers
   only and draw nothing for now. The crests are add-on kits, plain Parts fastened to the head joint, so they fit every
-  frame: 4 kits and 12 pieces authored in `art/kits.py` (pure Python) and generated into `src/shared/RobotKits.luau` by
+  frame: 6 kits and 32 pieces authored in `art/kits.py` (pure Python) and generated into `src/shared/RobotKits.luau` by
   `python art/kits.py --luau src/shared` or `.\scripts\art.ps1`. `.\scripts\art.ps1 -Previews kits` renders the crests and
   some paint jobs into `art\build\kits_*.png`.
 - **Adding a part.** Add it to the end of `Loadout.Chassis` or `Loadout.Modules` (a mod is a table of multipliers and frame
@@ -408,6 +415,49 @@ back to its team colors.
   reacts in about 11 frames, and slow heavy builds look worse against something that reads than against people who do not.
   Real balance needs playtests; `Loadout` is where to adjust.
 
+### The shop
+
+Everything for sale is cosmetic and sold directly, never as a loot box. A premium body draws a chassis as another robot
+with the same size, reach and stats; a crest only sits on the head.
+
+| Item | What | Price |
+| --- | --- | --- |
+| MONARCH | a premium body for MAUL: smooth rounded champion's armor, swept pauldrons, a gold V and title belt | 499 Robux |
+| CROWN | a crest: five gold points with a gem on each | 600 coins |
+| MOHAWK | a crest: four swept blades with a glowing edge | 350 coins |
+
+Coins come from matches: a 1v1 pays 40 for a win and 15 for a loss, a bot match 10, 20 or 35 for a win (EASY to HARD) and
+5 for a loss; training pays nothing. The SHOP page shows the coins and a card per item: tapping a card tries the item on
+(a body also picks its chassis) without changing the garage, and its button buys it (with coins, or through Roblox's
+purchase prompt) or, once owned, equips and unequips it. A bought item goes on as soon as the server says it is owned. A
+crest on the PAINT page that is not owned yet carries an amber mark, and picking it opens the shop wearing it.
+
+- **The catalog.** `src/shared/Shop.luau` lists the items (an id, which wallets keep and so never changes once shipped; a
+  kind; a price in coins or Robux) and the coin rewards. `Looks.Bodies` and `Looks.CrestItems` say which body or crest an
+  item unlocks. A Robux item is a developer product: `.\scripts\products.ps1` creates the product for every Robux item that
+  has none (`product = 0`), at its `robux` price, and writes the product ID into `Shop.luau`; it reuses a product with the
+  same name, so it can be run again. It needs the key's "developer-product" API with Read and Write. An item without a
+  product shows SOON and cannot be bought.
+- **The wallet.** `src/server/Wallet.luau` keeps each player's coins and owned items in the DataStore `RealSteelWallet1`
+  and publishes them on the player (`Coins`; `Owned`, the ids comma separated; and `WalletReady`, whether the stored wallet
+  has been read). Like a record, coins are saved as additions in one `UpdateAsync`, batch-numbered per server, so a retry
+  is never added twice and two servers never write over each other. A Robux purchase arrives through
+  `MarketplaceService.ProcessReceipt`: it is granted inside one `UpdateAsync` that also records its PurchaseId, and Roblox
+  is told the purchase went through only once that write has landed, so a receipt tried again (after a lost reply, or on
+  another server) is not granted twice, a failed write is retried by Roblox later (the buyer has the item for the session
+  meanwhile), and a buyer who left gets the item when they come back. Coin purchases go through the `Shop` remote (`"buy"`
+  and an item id, one request per 0.5 s) and are written at once. Until the stored wallet has been read nothing is sold
+  (the player might own it already): the shop shows LOADING and the read is tried again every 15 s; a Robux item paid for
+  shows PENDING until its grant arrives, so it is never offered twice. The garage asks the wallet what a player owns and
+  dresses them again whenever that changes. Ids the shop no longer sells stay in a wallet. Where DataStores are
+  unreachable (an unpublished place, or Studio without access to API services), coins and purchases last for the session;
+  test purchases in Studio are free.
+- **Adding an item.** A crest: its kit in `art/kits.py`, its name and kit at the end of `Looks.Crests`, `Looks.CrestKits`
+  and `Looks.CrestItems`, and the item in `Shop.Items`. A body: a frame module in `art/` (on the shared skeleton, keeping the
+  chassis' reach; see `art/monarch.py`) listed in `build_robot.PREMIUM`, exported and uploaded like the free frames, then an
+  entry at the end of `Looks.Bodies` and the item in `Shop.Items`, then `.\scripts\products.ps1`. `RobotSpec` checks the
+  body's frame and that its strikes reach at its chassis' size; `LoadoutSpec` checks the catalog.
+
 ## Robot art and animation
 
 Each chassis is drawn as its own original robot, a frame, modeled in Blender on one shared skeleton (ANVIL's joints, in
@@ -421,6 +471,16 @@ Each chassis is drawn as its own original robot, a frame, modeled in Blender on 
 | RAZOR | rushdown | a sharp prize-fighter: a wedge helmet with V eye slits, blade shoulders, razor-edged forearms, heel spurs | 56 | 10.9k |
 | MAUL | heavy hitter | an ex-industrial loader: a cab head with beacons and a roll bar, a grille chest, hammer fists, tread feet | 60 | 12.0k |
 
+The premium bodies are frames too, each for one chassis and sold in the shop. They keep the chassis' size and reach, so
+they play exactly like it:
+
+| Body | For | Look | Meshes | Triangles |
+| --- | --- | --- | --- | --- |
+| MONARCH | MAUL | a champion heavyweight in smooth rounded armor: domed pauldrons, a chest narrowing to the waist, a gold V around a glowing core, an angry visor, a title belt | 59 | 18.6k |
+
+MONARCH is built from `pod` shells (`robotlib.PartBuilder.pod`, a superellipsoid that can flare), which give the rounded
+look the free frames' bevelled boxes do not.
+
 A frame has one mesh per joint per material role: Armor and Trim take the player's paint, Glow (Neon) the accent color,
 Dark is the frame between the plates (so the gaps read as panel lines) and Steel is bare metal (pistons, rivets, cables,
 knuckle plates). The designs are original: robot boxers in general are fair game, a film's characters are not.
@@ -429,12 +489,14 @@ knuckle plates). The designs are original: robot boxers in general are fair game
 .\scripts\art.ps1                                  # every frame's textures, FBX and rig data, and the generated Luau
 .\scripts\art.ps1 -Frames BULWARK                  # only BULWARK's textures and FBX (every frame still goes into RobotRigs)
 .\scripts\art.ps1 -Previews frames -Engine EEVEE   # lineups and a hero shot of every frame into art\build
+.\scripts\art.ps1 -Previews premium -Engine EEVEE  # each premium body beside its chassis' frame, and a hero shot
 .\scripts\art.ps1 -Previews worn -Engine EEVEE     # bake the textures and render every frame wearing them
 .\scripts\art.ps1 -Previews poses                  # contact sheets of the key poses
 .\scripts\upload-robot.ps1 -Name Bulwark           # upload art\build\Bulwark.fbx and record the asset ID
 ```
 
-- **Source:** `art/anvil.py`, `bulwark.py`, `lance.py`, `razor.py` and `maul.py` (a frame each), `skeleton.py` (the shared
+- **Source:** `art/anvil.py`, `bulwark.py`, `lance.py`, `razor.py` and `maul.py` (a frame each), `monarch.py` (a premium
+  body), `skeleton.py` (the shared
   joints), `greebles.py` (pistons, cables, rivets, vents), `poses.py` (poses and clips), `wear.py` (the textures),
   `kits.py` (the crests), `robotlib.py`, `exporters.py`, the `preview*.py` renderers and `build_robot.py`. Everything is
   authored in Roblox axes and studs (the robot faces -Z, right is +X).
@@ -478,8 +540,8 @@ knuckle plates). The designs are original: robot boxers in general are fair game
   `RobotSpec` covers every frame's rig data (known roles, the shared skeleton, the rest pose, mirrored joints and left and
   right twin parts, the armor the effects aim at), a frame for every chassis, the clips, the animator, the crests (their
   data, symmetry and where they sit at each chassis' size) and, for every move, that the limb the move names reaches the
-  hit range during the active frames on every chassis' own frame at its size, and that the other limb does it when the
-  robot is drawn as a southpaw (102 checks).
+  hit range during the active frames on every chassis' own frame and every premium body at the chassis' size, and that the
+  other limb does it when the robot is drawn as a southpaw (110 checks).
   `BotSpec` covers the round flow (intro, clock, KO, time-up, draws, best of three, rematch, and who has won a match that
   is torn down during its last knockout), that the bot is a pure function of its inputs, that each level reads and
   punishes the way it should, that the stronger levels fire at a walker, guard coming out of a stun and punish a dash,
@@ -488,7 +550,8 @@ knuckle plates). The designs are original: robot boxers in general are fair game
   `LoadoutSpec` covers the garage's data: the catalog, the codes (all 135 loadouts and every paint code survive a round
   trip, nonsense reads as the stock ANVIL), the stats each part derives, the plain-language gain and cost lines, build names,
   that the simulation, the frame data and the bot play each fighter by its own stats, that a timed-out round goes to the
-  fuller health bar, the paint rules, and which frame and crest a build and a look are drawn with (143 checks).
+  fuller health bar, the paint rules, which frame and crest a build and a look are drawn with, premium bodies and what a
+  look keeps of the shop items its wearer does not own, and the shop's catalog, prices and coin rewards (154 checks).
   `QueueSpec` covers the line for the rings, on one ring and on the hall's three: a bot match starting at once, a 1v1
   pairing the two earliest 1v1 players in order, a lone 1v1 waiter not holding up the line, changing what you wait for
   keeping your place, leaving the game ending the session in your ring and no other, practice filling the pits before the
@@ -521,14 +584,28 @@ knuckle plates). The designs are original: robot boxers in general are fair game
   the panel sends a pick once and again until the server agrees, that quick picks go as one, that a pick the server never
   confirms is given up and a saved garage that arrives late is followed, and, on a desktop view, a phone and a tall narrow
   window, that the panel fits the view, every row of chips and swatches stays on its row, no text is cut off, every gain
-  and cost of the chosen parts is listed, and the equipped preset is marked (94 checks).
+  and cost of the chosen parts is listed, and the equipped preset is marked. The SHOP page: trying an item on (a body with
+  its chassis) without sending anything, buying with Robux only when the item has a product, buying with coins only when
+  there are enough, putting a bought item on once the server says it is owned, equipping and unequipping, the marks on the
+  crests not owned yet and picking one opening the shop, nothing sold before the wallet is known, and a Robux item never
+  prompted twice in a row or while its purchase is on its way (125 checks).
   Run `require(game.ReplicatedStorage.Tests.GarageSpec:Clone())()`; it builds its own copies of what it tests and cleans up.
-- **Garage server:** `GarageServerSpec` (Studio, Edit mode, 29 checks) runs `src/server/Garage.luau` against a stand-in
+- **Garage server:** `GarageServerSpec` (Studio, Edit mode, 37 checks) runs `src/server/Garage.luau` against a stand-in
   DataStore and stand-in players. It checks that a request is cleaned (out-of-range numbers, NaN, infinity, words, other
   actions, players nobody added), that one request per 0.1 s is taken, that fields a request leaves out keep their value, that
   the codes are published and every change reported, that a changed garage is saved whole, once, again after a failed write
-  and when the player leaves, that a saved garage (even a damaged one) is loaded, and that a pick made while the save is being
-  read wins. Run it like `GarageSpec`.
+  and when the player leaves, that a saved garage (even a damaged one) is loaded, that a pick made while the save is being
+  read wins, and that a player wears only the shop items they own, and wears a kept pick as soon as they buy it. Run it
+  like `GarageSpec`.
+- **Wallets:** `WalletSpec` (Studio, Edit mode, 65 checks) runs `src/server/Wallet.luau` against a stand-in store that can
+  fail a read or a write, or lose a reply. It checks that a stored wallet is read and cleaned, that matches pay by mode and
+  level and nothing for practice, that coins are saved as additions alongside another server's, never twice after a lost
+  reply and never lost after a failed write, that a payout never cancels the price of a coin purchase still waiting to be
+  written, that a player paid just after leaving is saved, buying with coins (price, ownership, never below zero, never
+  twice, the remote's checks and cooldown), that a Robux purchase is granted once however often its receipt comes back,
+  only after its write has landed (the buyer having it for the session meanwhile), for a buyer who is not in the server
+  too, and for the session without a store, and that a wallet that cannot be read sells nothing until a later read works
+  (or, in Studio, lasts for the session). Run it like `GarageSpec`.
 - **Records server:** `RecordsSpec` (Studio, Edit mode, 62 checks) runs `src/server/Records.luau` against stand-in record
   and board stores and stand-in players. It checks that a saved record arrives with what was won while it loaded, that
   1v1s and bot matches count (from either seat, by level) and training and exhibitions do not, that the title moves as
@@ -630,14 +707,11 @@ real controller), real-device performance, and the one or two predicted hits per
    then. Look at the garage on a real screen first: the panel has only been checked by measurement (`GarageSpec`), not by
    eye.
 4. Progression, which is what brings people back. The garage is built for it: gameplay parts are sidegrades open to
-   everyone, so currency earned per match and per bot level, mastery with a chassis, and ranked play with ratings can
-   unlock paint, finishes, crests and, later, new chassis (each a few more sidegrades, never a better one), and a daily
-   challenge can hand out a limited look. Robux items should stay cosmetic and be sold directly, never as loot boxes:
-   alternate bodies for a chassis (another frame on the same skeleton, with the same stats), liveries and effects, with
-   some basic liveries earnable with the free currency. The records, the champion's title and the leaderboards exist now
-   (`Records`), so a currency can be paid out where `Records.matchEnded` counts a win. None of the rest exists yet: the
-   swatches, finishes and crests are all open, and `Looks` is where a lock would go (the server would have to check it in
-   `Garage`).
+   everyone. The shop and its coins exist now (see The shop): one premium body and two coin crests. Next: more premium
+   bodies (one per chassis, then more), liveries and finishes, hit effects and victory emotes for Robux and for coins,
+   mastery with a chassis, ranked play with ratings, and a daily challenge that hands out a limited look. Robux items stay
+   cosmetic and are sold directly, never as loot boxes. Try a test purchase in Studio on the published place (free there):
+   the local checks place is not tied to the experience, so Roblox will not prompt a purchase in it.
 5. Add a launcher and juggle rules, wall interactions, and crouching or airborne states (the sim has no hit height yet, so
    there are no lows or overheads). Each new move needs a clip in `art/poses.py`; `RobotSpec` fails until the clip exists
    and its striking hand reaches the hit range.

@@ -317,6 +317,62 @@ return function(): (number, { string })
 				Loadout.decode((garage.codes(a))).chassis == 2 and Loadout.decode((garage.codes(b))).chassis == 4
 			)
 		end
+
+		-- Shop items: a player wears only what they own, keeps the pick for when they own it, and saves it.
+		do
+			local store = newStore()
+			local garage, changed = newGarage(store)
+			local ownedBy: { [number]: { [string]: boolean } } = {}
+			garage.setOwnership(function(player: any, item: string): boolean
+				local owned = ownedBy[player.UserId]
+				return owned ~= nil and owned[item] == true
+			end)
+			local buyer = newPlayer(31)
+			garage.add(buyer)
+			task.wait(0.05)
+			local monarch = Looks.bodyFor("body.monarch")
+			local crown = Looks.crestFor("crest.crown")
+			garage.handle(buyer, "set", { chassis = 5, body = monarch, crest = crown, armor = 4 })
+			local worn = Looks.decode(select(2, garage.codes(buyer)))
+			check(
+				"a body or a crest the player does not own is not worn, and the paint is",
+				worn.body == 1 and worn.crest == 1 and worn.armor == 4,
+				`{worn.body},{worn.crest},{worn.armor}`
+			)
+			check(
+				"nor published",
+				Looks.decode(buyer:GetAttribute("GarageLook")).body == 1
+					and Looks.decode(buyer:GetAttribute("GarageLook")).crest == 1
+			)
+			local before = #changed
+			ownedBy[31] = { ["body.monarch"] = true }
+			garage.refresh(buyer)
+			local afterBuy = Looks.decode(select(2, garage.codes(buyer)))
+			check(
+				"once bought, the kept pick is worn at once, and only what is owned",
+				afterBuy.body == monarch
+					and afterBuy.crest == 1
+					and Looks.decode(buyer:GetAttribute("GarageLook")).body == monarch
+			)
+			check("and the change is reported", #changed == before + 1, #changed - before)
+			ownedBy[31]["crest.crown"] = true
+			garage.refresh(buyer)
+			check("a crest bought later goes on too", Looks.decode(select(2, garage.codes(buyer))).crest == crown)
+			garage.saveAll()
+			check(
+				"the body is saved with the garage",
+				store.data.u31 ~= nil and store.data.u31.body == monarch and store.data.u31.crest == crown
+			)
+			local other = newPlayer(32)
+			garage.add(other)
+			task.wait(0.05)
+			task.wait(COOLDOWN)
+			garage.handle(other, "set", { chassis = 5, body = monarch })
+			check("one player's purchase is not another's", Looks.decode(select(2, garage.codes(other))).body == 1)
+			local reported = #changed
+			garage.refresh(newPlayer(99))
+			check("refreshing a player nobody added does nothing", #changed == reported)
+		end
 	end)
 	if not ok then
 		table.insert(failures, "the spec itself failed: " .. tostring(err))

@@ -164,6 +164,11 @@ return function(): (number, { string })
 	for _, frameName in Looks.Frames do
 		check(`the {frameName} frame exists`, (RobotRigs :: any)[frameName] ~= nil)
 	end
+	for _, body in Looks.Bodies do
+		if body.frame ~= nil then
+			check(`the {body.name} body's frame exists`, (RobotRigs :: any)[body.frame] ~= nil)
+		end
+	end
 
 	-- Clips: sampling hits its keys, loops are continuous, and nothing sinks into the floor.
 	do
@@ -380,11 +385,27 @@ return function(): (number, { string })
 			`{worstOffset}, {worstTurn}`
 		)
 
-		-- Each chassis' strikes still reach: the limb of the chassis' own frame, drawn at the chassis' size, gets to the hit
-		-- range the build has. A smaller robot may stop a little short at the very edge of the range, which is invisible.
+		-- Each chassis' strikes still reach: the limb of the chassis' own frame, and of each premium body for it, drawn at the
+		-- chassis' size, gets to the hit range the build has. A smaller robot may stop a little short at the very edge of the
+		-- range, which is invisible.
+		local drawnAs: { { name: string, frame: string, chassis: number } } = {}
 		for index, chassis in Loadout.Chassis do
-			local frameRig = RobotSkeleton.newRig((RobotRigs :: any)[Looks.Frames[index]])
-			local stats = Loadout.stats(Loadout.encode({ chassis = index, arms = 1, core = 1, legs = 1 }))
+			table.insert(drawnAs, { name = chassis.name, frame = Looks.Frames[index], chassis = index })
+		end
+		for _, body in Looks.Bodies do
+			if body.frame ~= nil and body.chassis ~= nil then
+				table.insert(drawnAs, { name = body.name, frame = body.frame, chassis = body.chassis })
+			end
+		end
+		for _, entry in drawnAs do
+			local def = (RobotRigs :: any)[entry.frame]
+			if def == nil then
+				check(`{entry.name} has a frame`, false)
+				continue
+			end
+			local chassis = Loadout.Chassis[entry.chassis]
+			local frameRig = RobotSkeleton.newRig(def)
+			local stats = Loadout.stats(Loadout.encode({ chassis = entry.chassis, arms = 1, core = 1, legs = 1 }))
 			local shortest = math.huge
 			local joints = table.create(frameRig.jointCount, CFrame.identity)
 			local parts = table.create(#frameRig.def.parts, CFrame.identity)
@@ -393,7 +414,7 @@ return function(): (number, { string })
 				local reach = RobotSkeleton.frontExtent(frameRig, parts, move.striker) * chassis.scale
 				shortest = math.min(shortest, reach - neededReach(move))
 			end
-			check(`{chassis.name} reaches what its moves can hit`, shortest >= -0.2, shortest)
+			check(`{entry.name} reaches what its moves can hit`, shortest >= -0.2, shortest)
 		end
 
 		-- Kits: the garage names real kits, every kit is used, and every piece is valid.

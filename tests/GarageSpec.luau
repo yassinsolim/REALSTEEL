@@ -21,6 +21,7 @@ type Scene = {
 	panel: any,
 	sent: { { [string]: number } },
 	sounds: { count: number },
+	bought: { string },
 }
 
 -- Whether a label can be seen: it and everything above it, up to `root`, is visible.
@@ -149,6 +150,7 @@ return function(): (number, { string })
 	local load: (module: any) -> any = require :: any
 	local Loadout: any = load((temp :: any).Shared.Loadout)
 	local Looks: any = load((temp :: any).Shared.Looks)
+	local Shop: any = load((temp :: any).Shared.Shop)
 	local GaragePanel: any = load((temp :: any).GaragePanel)
 
 	local function newScene(width: number, height: number, compact: boolean): Scene
@@ -161,6 +163,7 @@ return function(): (number, { string })
 		owner:SetAttribute("GarageLook", 1)
 		local sent: { { [string]: number } } = {}
 		local sounds = { count = 0 }
+		local bought: { string } = {}
 		local panel = GaragePanel.new({
 			gui = container,
 			owner = owner,
@@ -170,9 +173,13 @@ return function(): (number, { string })
 			play = function()
 				sounds.count += 1
 			end,
+			buy = function(item: any)
+				table.insert(bought, item.id)
+			end,
 		})
 		panel.setCompact(compact)
-		local scene: Scene = { container = container, owner = owner, panel = panel, sent = sent, sounds = sounds }
+		local scene: Scene =
+			{ container = container, owner = owner, panel = panel, sent = sent, sounds = sounds, bought = bought }
 		table.insert(scenes, scene)
 		return scene
 	end
@@ -216,6 +223,7 @@ return function(): (number, { string })
 					and first.accent == 1
 					and first.finish == 1
 					and first.crest == 1
+					and first.body == 1
 			)
 			clock += 0.1
 			panel.step(clock)
@@ -302,7 +310,7 @@ return function(): (number, { string })
 			-- A saved garage that arrives late is followed, and nonsense is not.
 			local saved = Loadout.encode({ chassis = 5, arms = 3, core = 3, legs = 1 })
 			owner:SetAttribute("GarageLoadout", saved)
-			owner:SetAttribute("GarageLook", Looks.encode({ armor = 9, accent = 4, finish = 2, crest = 2 }))
+			owner:SetAttribute("GarageLook", Looks.encode({ armor = 9, accent = 4, finish = 2, crest = 2, body = 1 }))
 			clock += FRAME
 			panel.step(clock)
 			local followed, followedLook = panel.current()
@@ -320,6 +328,170 @@ return function(): (number, { string })
 			panel.open()
 			task.wait(0.5)
 			check("and it opens again", panel.isOpen() and frame ~= nil and frame.Visible)
+		end
+
+		-- The shop: trying on, buying with coins and with Robux, equipping, and crests that are not owned yet.
+		do
+			local scene = newScene(1280, 720, false)
+			local panel, owner, sent, bought = scene.panel, scene.owner, scene.sent, scene.bought
+			local monarch, crown, mohawk = 0, 0, 0
+			for index, item in Shop.Items do
+				if item.id == "body.monarch" then
+					monarch = index
+				elseif item.id == "crest.crown" then
+					crown = index
+				elseif item.id == "crest.mohawk" then
+					mohawk = index
+				end
+			end
+			check("the shop sells MONARCH, CROWN and MOHAWK", monarch > 0 and crown > 0 and mohawk > 0)
+			local crownCrest = Looks.crestFor("crest.crown")
+			local mohawkCrest = Looks.crestFor("crest.mohawk")
+			local monarchBody = Looks.bodyFor("body.monarch")
+			local clock = 3000
+			owner:SetAttribute("Coins", 1250)
+			owner:SetAttribute("Owned", "")
+			panel.step(clock)
+			panel.open()
+			task.wait(0.6)
+			local frame = scene.container:FindFirstChild("Garage") :: Frame?
+			local shopPage = if frame ~= nil then frame:FindFirstChild("SHOP") else nil
+			panel.actions.tab(4)
+			task.wait(0.05)
+			check("the SHOP page shows", shopPage ~= nil and (shopPage :: ScrollingFrame).Visible)
+			local coinsShown = false
+			if shopPage ~= nil then
+				for _, item in shopPage:GetDescendants() do
+					if item:IsA("TextLabel") and string.find(item.Text, "1,250", 1, true) ~= nil then
+						coinsShown = true
+					end
+				end
+			end
+			check("the shop shows the coins", coinsShown)
+
+			-- Trying MONARCH on draws it on MAUL without asking the server for anything.
+			panel.actions.item(monarch)
+			local tryLoadout, tryLook = panel.preview()
+			check(
+				"tapping a body tries it on, on its own chassis",
+				tryLoadout ~= nil
+					and Loadout.decode(tryLoadout).chassis == 5
+					and tryLook ~= nil
+					and Looks.decode(tryLook).body == monarchBody
+			)
+			clock += 0.5
+			panel.step(clock)
+			check("trying on sends nothing", #sent == 0, #sent)
+			check("trying on leaves the garage as it was", (panel.current()) == Loadout.DefaultCode)
+
+			-- MONARCH has no developer product yet: its button does nothing.
+			local productBefore = Shop.Items[monarch].product
+			Shop.Items[monarch].product = 0
+			panel.actions.itemAction(monarch)
+			check("an item without a product cannot be bought", #bought == 0, #bought)
+			-- Until the server has read the wallet nothing is sold: the player might own it already.
+			Shop.Items[monarch].product = 123456
+			panel.actions.itemAction(monarch)
+			check("nothing is sold before the wallet is known", #bought == 0, #bought)
+			owner:SetAttribute("WalletReady", true)
+			clock += FRAME
+			panel.step(clock)
+			-- With a product, its button prompts the purchase, and not again straight away.
+			panel.actions.itemAction(monarch)
+			check("a Robux item's button buys it", bought[#bought] == "body.monarch", bought[#bought])
+			panel.actions.itemAction(monarch)
+			check("a second tap straight after prompts nothing", #bought == 1, #bought)
+			-- A prompt closed without buying can be opened again at once.
+			panel.purchaseFinished("body.monarch", false)
+			panel.actions.itemAction(monarch)
+			check("after a prompt closed without buying, it prompts again", #bought == 2, #bought)
+			-- Bought: it shows as on its way and is not offered again until the server grants it.
+			panel.purchaseFinished("body.monarch", true)
+			clock += 3
+			panel.step(clock)
+			panel.actions.itemAction(monarch)
+			local pendingShown = false
+			if shopPage ~= nil then
+				for _, item in shopPage:GetDescendants() do
+					if item:IsA("TextButton") and item.Text == "PENDING" then
+						pendingShown = true
+					end
+				end
+			end
+			check("a paid item is shown as on its way and not sold again", pendingShown and #bought == 2, #bought)
+			-- The purchase lands: it goes on at once, with its chassis.
+			owner:SetAttribute("Owned", "body.monarch")
+			clock += FRAME
+			panel.step(clock)
+			local afterLoadout, afterLook = panel.current()
+			check(
+				"a bought body is put on, with its chassis",
+				Loadout.decode(afterLoadout).chassis == 5 and Looks.decode(afterLook).body == monarchBody
+			)
+			clock += FRAME
+			panel.step(clock)
+			local wanted = sent[#sent]
+			check(
+				"and the server is asked for it",
+				wanted ~= nil and wanted.chassis == 5 and wanted.body == monarchBody,
+				if wanted ~= nil then `{wanted.chassis},{wanted.body}` else "nothing sent"
+			)
+			-- Its button now takes it off.
+			panel.actions.itemAction(monarch)
+			check("an equipped body's button takes it off", Looks.decode(select(2, panel.current())).body == 1)
+			panel.actions.itemAction(monarch)
+			check("and puts it back on", Looks.decode(select(2, panel.current())).body == monarchBody)
+			Shop.Items[monarch].product = productBefore
+
+			-- Coins: too few buys nothing; enough buys it, and it goes on when the server says it is owned.
+			owner:SetAttribute("Coins", 100)
+			clock += FRAME
+			panel.step(clock)
+			local boughtBefore = #bought
+			panel.actions.itemAction(crown)
+			check("too few coins buy nothing", #bought == boughtBefore)
+			owner:SetAttribute("Coins", 1250)
+			clock += FRAME
+			panel.step(clock)
+			panel.actions.itemAction(crown)
+			check("enough coins buy a crest", bought[#bought] == "crest.crown", bought[#bought])
+			owner:SetAttribute("Owned", "body.monarch,crest.crown")
+			owner:SetAttribute("Coins", 650)
+			clock += FRAME
+			panel.step(clock)
+			check("a bought crest is put on", Looks.decode(select(2, panel.current())).crest == crownCrest)
+
+			-- A crest that is not owned yet, picked on the PAINT page, is tried on in the shop instead.
+			panel.actions.tab(3)
+			task.wait(0.05)
+			local paintPage = if frame ~= nil then frame:FindFirstChild("PAINT") else nil
+			local marks = 0
+			if paintPage ~= nil then
+				for _, item in paintPage:GetDescendants() do
+					if item.Name == "Locked" and item:IsA("GuiObject") and item.Visible then
+						marks += 1
+					end
+				end
+			end
+			check("only the crests not owned yet are marked", marks == 1, marks)
+			panel.actions.crest(mohawkCrest)
+			local _, mohawkLook = panel.preview()
+			check(
+				"picking a crest that is not owned opens the shop wearing it",
+				shopPage ~= nil
+					and (shopPage :: ScrollingFrame).Visible
+					and mohawkLook ~= nil
+					and Looks.decode(mohawkLook).crest == mohawkCrest
+					and Looks.decode(select(2, panel.current())).crest == crownCrest
+			)
+			panel.actions.tab(1)
+			owner:SetAttribute("GarageLoadout", (panel.current()))
+			owner:SetAttribute("GarageLook", select(2, panel.current()))
+			clock += FRAME
+			panel.step(clock)
+			clock += 1
+			panel.step(clock)
+			check("leaving the shop stops trying things on", panel.preview() == nil)
 		end
 
 		-- The layout, on a desktop view, a phone and a tall narrow window.
@@ -378,12 +550,12 @@ return function(): (number, { string })
 					end
 				end
 			end
-			check(`{view.name}: three tabs`, #tabButtons == 3, #tabButtons)
+			check(`{view.name}: four tabs`, #tabButtons == 4, #tabButtons)
 			local tabRows = if tabs ~= nil then gridShape(tabs) else 0
 			check(`{view.name}: the tabs share a row`, tabRows == 1, tabRows)
 
 			local pagesSeen = 0
-			for index, pageName in { "BUILD", "PRESETS", "PAINT" } do
+			for index, pageName in { "BUILD", "PRESETS", "PAINT", "SHOP" } do
 				scene.panel.actions.tab(index)
 				task.wait(0.05)
 				local page = frame:FindFirstChild(pageName) :: ScrollingFrame?
@@ -415,7 +587,7 @@ return function(): (number, { string })
 					end
 				end
 			end
-			check(`{view.name}: all three pages exist`, pagesSeen == 3)
+			check(`{view.name}: all four pages exist`, pagesSeen == 4)
 
 			-- The rows of chips and swatches.
 			scene.panel.actions.tab(1)
@@ -442,10 +614,9 @@ return function(): (number, { string })
 					local rows, cells = gridShape(grid)
 					table.insert(shapes, `{cells}x{rows}`)
 				end
-				local crestRows = if view.mode == "side" and not view.compact then 1 else 2
 				check(
-					`{view.name}: swatches make two rows of eight; finishes and crests fit`,
-					table.concat(shapes, ",") == `16x2,16x2,4x1,5x{crestRows}`,
+					`{view.name}: swatches make two rows of eight; finishes fit a row and crests two`,
+					table.concat(shapes, ",") == "16x2,16x2,4x1,7x2",
 					table.concat(shapes, ",")
 				)
 			end

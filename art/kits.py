@@ -16,7 +16,7 @@ import math
 import os
 
 KITS = {}
-CRESTS = ("CrestFin", "CrestAntenna", "CrestHorns", "CrestHalo")
+CRESTS = ("CrestFin", "CrestAntenna", "CrestHorns", "CrestHalo", "CrestCrown", "CrestMohawk")
 
 
 class Kit:
@@ -92,6 +92,24 @@ def crests():
     halo = Kit("CrestHalo")
     halo.cyl("Head", "Glow", (0, 7.1, 0.05), 1.6, 0.08)
     halo.rod("Head", "Dark", (0, 6.38, 0.05), (0, 7.06, 0.05), 0.12)
+
+    # Bought with coins (see Shop.luau).
+    crown = Kit("CrestCrown")
+    crown.cyl("Head", "Trim", (0, 6.38, 0.08), 0.92, 0.16)
+    crown.cyl("Head", "Dark", (0, 6.48, 0.08), 0.78, 0.06)
+    for index in range(5):
+        # Five points around the band, one at the front, each leaning out a little and tipped with a gem.
+        angle = math.pi / 2 + 2 * math.pi * index / 5
+        x = 0.38 * math.cos(angle)
+        z = 0.08 - 0.38 * math.sin(angle)
+        crown.box("Head", "Trim", (x, 6.66, z), (0.16, 0.46, 0.16), (-12 * math.sin(angle), 0, 12 * math.cos(angle)))
+        crown.ball("Head", "Glow", (1.12 * x, 6.94, 0.08 + 1.12 * (z - 0.08)), 0.16)
+
+    mohawk = Kit("CrestMohawk")
+    for z, height in ((-0.3, 0.46), (-0.06, 0.62), (0.18, 0.68), (0.42, 0.54)):
+        # Blades front to back, swept back, a glowing edge along each.
+        mohawk.box("Head", "Armor", (0, 6.34 + height / 2, z), (0.16, height, 0.26), (-24, 0, 0))
+        mohawk.box("Head", "Glow", (0, 6.36 + height / 2, z - 0.14), (0.1, height * 0.8, 0.04), (-24, 0, 0))
 
 
 def build():

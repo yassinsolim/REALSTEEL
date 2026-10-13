@@ -44,6 +44,9 @@
         },
         "RecordsSpec": {
           "$path": "tests/RecordsSpec.luau"
+        },
+        "WalletSpec": {
+          "$path": "tests/WalletSpec.luau"
         }
       }
     },

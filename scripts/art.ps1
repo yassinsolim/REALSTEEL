@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('none', 'rest', 'poses', 'all', 'kits', 'frames', 'worn')]
+    [ValidateSet('none', 'rest', 'poses', 'all', 'kits', 'frames', 'worn', 'premium')]
     [string]$Previews = 'none',
     [ValidateSet('WORKBENCH', 'EEVEE')]
     [string]$Engine = 'WORKBENCH',
@@ -13,7 +13,8 @@ param(
 # src/shared/RobotRigs.luau, RobotClips.luau and RobotKits.luau (tracked, formatted with stylua). -Frames 'BULWARK,LANCE'
 # limits the textures and FBX to those frames. Previews render instead of exporting: -Previews poses renders contact
 # sheets of the key poses into art/build, kits the crests and some paint jobs, frames lineups and a hero shot of every
-# frame, and worn bakes the textures and renders every frame wearing them (use -Engine EEVEE, which gives lit renders).
+# frame, premium each premium body beside its chassis' frame, and worn bakes the textures and renders every frame wearing
+# them (use -Engine EEVEE, which gives lit renders).
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 

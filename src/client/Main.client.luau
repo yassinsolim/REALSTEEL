@@ -7,6 +7,7 @@
 local CollectionService = game:GetService("CollectionService")
 local GuiService = game:GetService("GuiService")
 local Lighting = game:GetService("Lighting")
+local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -25,6 +26,7 @@ local InputSetup = require(Shared:WaitForChild("InputSetup"))
 local Loadout = require(Shared:WaitForChild("Loadout"))
 local Looks = require(Shared:WaitForChild("Looks"))
 local MatchFlow = require(Shared:WaitForChild("MatchFlow"))
+local Shop = require(Shared:WaitForChild("Shop"))
 local Simulation = require(Shared:WaitForChild("Simulation"))
 local ArenaFx = require(script.Parent:WaitForChild("ArenaFx"))
 local Bays = require(script.Parent:WaitForChild("Bays"))
@@ -235,6 +237,7 @@ end
 local hud = Hud.new()
 local menuRemote = ReplicatedStorage:WaitForChild("Menu") :: RemoteEvent
 local garageRemote = ReplicatedStorage:WaitForChild("Garage") :: RemoteEvent
+local shopRemote = ReplicatedStorage:WaitForChild("Shop") :: RemoteEvent
 local garage = GaragePanel.new({
 	gui = hud.gui,
 	owner = player,
@@ -244,7 +247,24 @@ local garage = GaragePanel.new({
 	play = function(name: string, gain: number?, pitch: number?)
 		Sfx.play(sfx, name, gain, pitch)
 	end,
+	-- Coins are spent by the server; Robux go through Roblox's purchase prompt, and the server hears of the purchase
+	-- itself (see Wallet).
+	buy = function(item: Shop.Item)
+		if item.coins ~= nil then
+			shopRemote:FireServer("buy", item.id)
+		elseif Shop.forRobux(item) then
+			MarketplaceService:PromptProductPurchase(player, item.product :: number)
+		end
+	end,
 })
+-- How a purchase prompt closed, so the shop shows a paid item as on its way rather than for sale. (The purchase itself is
+-- granted by the server's ProcessReceipt, never from this.)
+MarketplaceService.PromptProductPurchaseFinished:Connect(function(userId: number, productId: number, purchased: boolean)
+	local item = Shop.byProduct(productId)
+	if userId == player.UserId and item ~= nil then
+		garage.purchaseFinished(item.id, purchased)
+	end
+end)
 local function send(action: string, level: number?)
 	menuRemote:FireServer(action, level)
 end

@@ -3,7 +3,8 @@
 -- Server: every player's garage. A profile is the loadout and the look a player has chosen. It is kept in memory, saved to
 -- a DataStore when Studio or the game allows it, and handed to the fighters when a match starts (see Main.server). The
 -- client only ever asks: whatever it sends is sanitized here before it is stored or replicated, and the numbers the match
--- uses are the ones on the fighter cores, not anything a client says about itself.
+-- uses are the ones on the fighter cores, not anything a client says about itself. A look may pick shop items (a premium
+-- body, a crest); the profile keeps the pick, but only what the player owns is published and worn (Looks.strip).
 
 local DataStoreService = game:GetService("DataStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -29,7 +30,7 @@ type Profile = {
 }
 
 export type Garage = {
-	-- The loadout and look codes a player's fighter takes into a match.
+	-- The loadout and look codes a player's fighter takes into a match (the look without anything they do not own).
 	codes: (player: Player) -> (number, number),
 	add: (player: Player) -> (),
 	remove: (player: Player) -> (),
@@ -37,6 +38,11 @@ export type Garage = {
 	saveAll: () -> (),
 	-- What the remote does with a request. The remote calls it; checks can too.
 	handle: (player: Player, action: unknown, payload: unknown) -> (),
+	-- Who owns which shop item (see Wallet). Until it is set nobody owns anything.
+	setOwnership: (owns: (player: Player, item: string) -> boolean) -> (),
+	-- Publishes a player's garage again after what they own changed, so an item they just got shows (or one they no longer
+	-- have comes off).
+	refresh: (player: Player) -> (),
 	-- Stops the background saving. The server never needs it; checks do.
 	destroy: () -> (),
 }
@@ -69,6 +75,7 @@ local function toSaved(profile: Profile): { [string]: number }
 		accent = profile.look.accent,
 		finish = profile.look.finish,
 		crest = profile.look.crest,
+		body = profile.look.body,
 	}
 end
 
@@ -88,6 +95,9 @@ function Garage.new(onChange: (player: Player) -> (), options: Options?): Garage
 	local profiles: { [Player]: Profile } = {}
 	local lastRequest: { [Player]: number } = {}
 	local running = true
+	local ownership: (player: Player, item: string) -> boolean = function(_player: Player, _item: string): boolean
+		return false
+	end
 
 	local store: any = nil
 	if options ~= nil and options.store ~= nil then
@@ -103,10 +113,17 @@ function Garage.new(onChange: (player: Player) -> (), options: Options?): Garage
 		end
 	end
 
+	-- The look a player may wear: their pick, without the shop items they do not own.
+	local function wornLook(player: Player, profile: Profile): Looks.Look
+		return Looks.strip(profile.look, function(item: string): boolean
+			return ownership(player, item)
+		end)
+	end
+
 	-- What the client's garage screen reads. The numbers are the same codes the fighters use.
 	local function publish(player: Player, profile: Profile)
 		player:SetAttribute("GarageLoadout", Loadout.encode(profile.choice))
-		player:SetAttribute("GarageLook", Looks.encode(profile.look))
+		player:SetAttribute("GarageLook", Looks.encode(wornLook(player, profile)))
 	end
 
 	local function save(player: Player, profile: Profile)
@@ -173,7 +190,7 @@ function Garage.new(onChange: (player: Player) -> (), options: Options?): Garage
 		-- Fields the client leaves out keep what the profile has.
 		local source = payload :: { [string]: unknown }
 		local merged: { [string]: unknown } = table.clone(toSaved(profile) :: any)
-		for _, key in { "chassis", "arms", "core", "legs", "armor", "accent", "finish", "crest" } do
+		for _, key in { "chassis", "arms", "core", "legs", "armor", "accent", "finish", "crest", "body" } do
 			local value = numberField(source, key)
 			if value ~= nil then
 				merged[key] = value
@@ -206,7 +223,7 @@ function Garage.new(onChange: (player: Player) -> (), options: Options?): Garage
 			if profile == nil then
 				return Loadout.DefaultCode, 1
 			end
-			return Loadout.encode(profile.choice), Looks.encode(profile.look)
+			return Loadout.encode(profile.choice), Looks.encode(wornLook(player, profile))
 		end,
 		add = function(player: Player)
 			local profile: Profile = {
@@ -234,6 +251,16 @@ function Garage.new(onChange: (player: Player) -> (), options: Options?): Garage
 			end
 		end,
 		handle = handle,
+		setOwnership = function(owns: (player: Player, item: string) -> boolean)
+			ownership = owns
+		end,
+		refresh = function(player: Player)
+			local profile = profiles[player]
+			if profile ~= nil then
+				publish(player, profile)
+				onChange(player)
+			end
+		end,
 		destroy = function()
 			running = false
 			connection:Disconnect()

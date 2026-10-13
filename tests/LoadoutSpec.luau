@@ -14,6 +14,7 @@ local FrameData = require(ReplicatedStorage.Shared.FrameData)
 local Loadout = require(ReplicatedStorage.Shared.Loadout)
 local Looks = require(ReplicatedStorage.Shared.Looks)
 local MatchFlow = require(ReplicatedStorage.Shared.MatchFlow)
+local Shop = require(ReplicatedStorage.Shared.Shop)
 
 local State = FightSim.State
 
@@ -600,7 +601,10 @@ return function(): (number, { string })
 			#Looks.Armor == 16 and #Looks.Accents == 16,
 			`{#Looks.Armor},{#Looks.Accents}`
 		)
-		check("four finishes and five crests", #Looks.Finishes == 4 and #Looks.Crests == 5 and #Looks.CrestKits == 5)
+		check(
+			"four finishes, seven crests, and a kit and a shop item (or none) for each crest",
+			#Looks.Finishes == 4 and #Looks.Crests == 7 and #Looks.CrestKits == 7 and #Looks.CrestItems == 7
+		)
 		check(
 			"the first swatch of each list is the team color",
 			Looks.Armor[1].color == nil and Looks.Accents[1].color == nil
@@ -646,17 +650,18 @@ return function(): (number, { string })
 		local allDefault = true
 		for index = 1, 9 do
 			local back = Looks.decode(garbage[index])
-			if back.armor ~= 1 or back.accent ~= 1 or back.finish ~= 1 or back.crest ~= 1 then
+			if back.armor ~= 1 or back.accent ~= 1 or back.finish ~= 1 or back.crest ~= 1 or back.body ~= 1 then
 				allDefault = false
 			end
 		end
 		check("nonsense looks fall back to the default", allDefault)
-		local odd = Looks.sanitize({ armor = 99, accent = -2, finish = "x", crest = 3.9 })
+		local odd = Looks.sanitize({ armor = 99, accent = -2, finish = "x", crest = 3.9, body = 42 })
 		check(
 			"odd looks are clamped",
-			odd.armor == 16 and odd.accent == 1 and odd.finish == 1 and odd.crest == 3,
-			`{odd.armor},{odd.accent},{odd.finish},{odd.crest}`
+			odd.armor == 16 and odd.accent == 1 and odd.finish == 1 and odd.crest == 3 and odd.body == #Looks.Bodies,
+			`{odd.armor},{odd.accent},{odd.finish},{odd.crest},{odd.body}`
 		)
+		check("a save from before bodies wears the stock body", Looks.sanitize({ armor = 3, crest = 2 }).body == 1)
 
 		-- Kits and frames.
 		check(
@@ -666,7 +671,7 @@ return function(): (number, { string })
 		check("every crest but none has a kit", #Looks.CrestKits == #Looks.Crests and Looks.CrestKits[1] == "")
 		local dressed = Looks.kitsFor(
 			{ chassis = BULWARK, arms = PISTON, core = PLATING, legs = 2 },
-			{ armor = 1, accent = 1, finish = 1, crest = 4 }
+			{ armor = 1, accent = 1, finish = 1, crest = 4, body = 1 }
 		)
 		check(
 			"only the crest is a kit; the build shows in the frame",
@@ -689,6 +694,118 @@ return function(): (number, { string })
 				and Looks.frameFor(Loadout.decode(Loadout.DefaultCode), Looks.default()) == "Anvil"
 		)
 
+		-- Premium bodies and shop crests.
+		local monarch = Looks.bodyFor("body.monarch") :: number
+		check(
+			"MONARCH is a body for MAUL, drawn as its own frame",
+			monarch ~= nil
+				and Looks.Bodies[monarch].chassis == MAUL
+				and Looks.Bodies[monarch].frame == "Monarch"
+				and Looks.Bodies[1].frame == nil
+				and Looks.Bodies[1].item == nil
+		)
+		local maulBuild = { chassis = MAUL, arms = 1, core = 1, legs = 1 }
+		local wearsMonarch = { armor = 1, accent = 1, finish = 1, crest = 1, body = monarch }
+		check(
+			"a premium body draws its own chassis, and only that one",
+			Looks.frameFor(maulBuild, wearsMonarch) == "Monarch"
+				and Looks.frameFor({ chassis = ANVIL, arms = 1, core = 1, legs = 1 }, wearsMonarch) == "Anvil"
+				and Looks.frameFor(maulBuild, Looks.default()) == "Maul"
+		)
+		local premium =
+			{ armor = 2, accent = 3, finish = 2, crest = Looks.crestFor("crest.crown") :: number, body = monarch }
+		local nothing = Looks.strip(premium, function(_item: string): boolean
+			return false
+		end)
+		local everything = Looks.strip(premium, function(_item: string): boolean
+			return true
+		end)
+		local onlyCrown = Looks.strip(premium, function(item: string): boolean
+			return item == "crest.crown"
+		end)
+		check(
+			"a look keeps only the shop items its wearer owns, and all of its paint",
+			nothing.body == 1
+				and nothing.crest == 1
+				and nothing.armor == 2
+				and nothing.accent == 3
+				and nothing.finish == 2
+				and everything.body == monarch
+				and everything.crest == premium.crest
+				and onlyCrown.body == 1
+				and onlyCrown.crest == premium.crest
+		)
+		local freeStays = Looks.strip({ armor = 1, accent = 1, finish = 1, crest = 4, body = 1 }, function(): boolean
+			return false
+		end)
+		check("everyone's crests need nothing", freeStays.crest == 4)
+		local botsFree = true
+		for seed = 0, 40 do
+			if Looks.crestItem(Looks.botLook(seed).crest) ~= nil or Looks.botLook(seed).body ~= 1 then
+				botsFree = false
+			end
+		end
+		check("bots wear only what everyone has", botsFree)
+
+		-- The shop.
+		local known = true
+		for index = 1, #Looks.Crests do
+			local id = Looks.crestItem(index)
+			local item = if id ~= nil then Shop.item(id) else nil
+			if id ~= nil and (item == nil or item.kind ~= "crest") then
+				known = false
+			end
+		end
+		for index = 1, #Looks.Bodies do
+			local id = Looks.bodyItem(index)
+			local item = if id ~= nil then Shop.item(id) else nil
+			if id ~= nil and (item == nil or item.kind ~= "body") then
+				known = false
+			end
+		end
+		check("every shop crest and body is in the catalog", known)
+		local ids: { [string]: boolean } = {}
+		local wellFormed = true
+		for _, item in Shop.Items do
+			local unlocks = if item.kind == "body" then Looks.bodyFor(item.id) else Looks.crestFor(item.id)
+			local priced = (item.coins ~= nil and item.coins > 0) ~= (item.robux ~= nil and item.robux > 0)
+			if ids[item.id] or unlocks == nil or not priced then
+				wellFormed = false
+			end
+			ids[item.id] = true
+		end
+		check("every item has its own id, unlocks a look, and one price, in coins or in Robux", wellFormed)
+		check(
+			"items are found by id and by product",
+			Shop.item("crest.mohawk") ~= nil
+				and Shop.item("nope") == nil
+				and Shop.item(7) == nil
+				and Shop.byProduct(0) == nil
+				and Shop.byProduct("1") == nil
+		)
+		check(
+			"matches pay more for a win and for a harder bot, something for a loss, and nothing for practice",
+			Shop.reward("versus", 0, true) > Shop.reward("versus", 0, false)
+				and Shop.reward("versus", 0, false) > 0
+				and Shop.reward("bot", 3, true) > Shop.reward("bot", 2, true)
+				and Shop.reward("bot", 2, true) > Shop.reward("bot", 1, true)
+				and Shop.reward("bot", 1, true) > Shop.reward("bot", 1, false)
+				and Shop.reward("bot", 1, false) > 0
+				and Shop.reward("training", 1, true) == 0
+				and Shop.reward("exhibition", 1, true) == 0
+		)
+		local parsed = Shop.parseOwned("body.monarch,crest.crown")
+		check(
+			"coins read with separators and owned items read back",
+			Shop.formatCoins(1250) == "1,250"
+				and Shop.formatCoins(999) == "999"
+				and Shop.formatCoins(1000000) == "1,000,000"
+				and parsed["body.monarch"] == true
+				and parsed["crest.crown"] == true
+				and next(Shop.parseOwned(nil)) == nil
+				and next(Shop.parseOwned("")) == nil
+		)
+
 		-- Colors.
 		local me, foe = Looks.resolve(Looks.default(), Looks.default())
 		check(
@@ -698,7 +815,7 @@ return function(): (number, { string })
 				and foe.armor == Looks.Team.foe.armor
 				and foe.accent == Looks.Team.foe.accent
 		)
-		local crimson = { armor = 10, accent = 11, finish = 3, crest = 2 }
+		local crimson = { armor = 10, accent = 11, finish = 3, crest = 2, body = 1 }
 		local mine, theirs = Looks.resolve(crimson, crimson)
 		check(
 			"a look is shown as chosen",
@@ -712,15 +829,15 @@ return function(): (number, { string })
 			"the opponent falls back to its team colors",
 			theirs.armor == Looks.Team.foe.armor and theirs.accent == Looks.Team.foe.accent
 		)
-		local gunmetal = { armor = 3, accent = 1, finish = 1, crest = 1 }
+		local gunmetal = { armor = 3, accent = 1, finish = 1, crest = 1, body = 1 }
 		local _, against = Looks.resolve(gunmetal, Looks.default())
 		check(
 			"even the team color gives way when it would clash",
 			Looks.distance(against.armor, Looks.Armor[3].color :: Looks.Rgb) >= 70
 		)
 		local apart1, apart2 = Looks.resolve(
-			{ armor = 10, accent = 9, finish = 1, crest = 1 },
-			{ armor = 12, accent = 3, finish = 2, crest = 5 }
+			{ armor = 10, accent = 9, finish = 1, crest = 1, body = 1 },
+			{ armor = 12, accent = 3, finish = 2, crest = 5, body = 1 }
 		)
 		check(
 			"colors that already differ are left alone",

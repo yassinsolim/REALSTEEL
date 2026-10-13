@@ -92,7 +92,7 @@ local Vector2 = {
 	end,
 }
 '@)
-foreach ($name in 'FightConfig', 'FightSim', 'MatchFlow', 'Loadout', 'Looks', 'BotBrain', 'FrameData', 'RingQueue', 'FoundryLayout', 'Standings', 'Hoist') {
+foreach ($name in 'FightConfig', 'FightSim', 'MatchFlow', 'Loadout', 'Looks', 'Shop', 'BotBrain', 'FrameData', 'RingQueue', 'FoundryLayout', 'Standings', 'Hoist') {
     $source = [System.IO.File]::ReadAllText((Join-Path $root "src\shared\$name.luau"))
     # The modules require each other through script.Parent, and export their types; neither exists outside Roblox.
     $source = $source -replace 'require\(script\.Parent\.(\w+)\)', 'load("$1")'
