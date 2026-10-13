@@ -49,6 +49,7 @@ local function sameStats(a: FightConfig.Stats, b: FightConfig.Stats): boolean
 		or a.walkBack ~= b.walkBack
 		or a.strafe ~= b.strafe
 		or a.chipTaken ~= b.chipTaken
+		or a.guardTaken ~= b.guardTaken
 		or a.blockstunTaken ~= b.blockstunTaken
 		or a.hitstunTaken ~= b.hitstunTaken
 		or a.knockbackTaken ~= b.knockbackTaken

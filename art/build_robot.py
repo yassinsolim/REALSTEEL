@@ -58,6 +58,10 @@ SHEETS = {
     "movement": ("side", ["DashCoil", "DashF", "DashB", "WalkF0", "WalkF1", "WalkB1"]),
     "front": ("front", ["Stance", "Guard", "JabStrike", "StraightStrike", "DashL", "DashR"]),
     "emotes": ("front", ["IntroA", "IntroB", "VictoryA", "VictoryB", "Slump", "Stance"]),
+    "guardbreak": ("side", ["Guard", "GuardBreakShove", "GuardBreakReel", "GuardBreakDazeA", "GuardBreakDazeB", "BreakRecoil"]),
+    "grab": ("side", ["GrabReach", "GrabClose", "GrabWhiff", "ThrowLift", "ThrowHeave", "ThrowSlam"]),
+    "thrown": ("side", ["ThrownCaught", "ThrownLifted", "ThrownSlammed", "ThrownDown", "ThrownRise", "BreakShove"]),
+    "grabfront": ("front", ["GrabReach", "GrabClose", "ThrowLift", "ThrowHeave", "GuardBreakReel", "GuardBreakDazeB"]),
 }
 
 # What each strike's limb must reach to look like it connects at the longest range the hit detection allows:

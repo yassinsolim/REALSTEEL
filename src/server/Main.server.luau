@@ -1,7 +1,7 @@
 --!strict
 
 -- Server: builds THE FOUNDRY, runs the fight simulation for every ring, and wires every player to their garage, their bay
--- in the hall and the line for the rings (see Rings).
+-- in the hall, the pads in front of the main ring and the line for the rings (see Rings and Pads).
 
 local Players = game:GetService("Players")
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -11,6 +11,7 @@ local RunService = game:GetService("RunService")
 local InputSetup = require(ReplicatedStorage.Shared.InputSetup)
 local Simulation = require(ReplicatedStorage.Shared.Simulation)
 local Garage = require(script.Parent.Garage)
+local Pads = require(script.Parent.Pads)
 local Records = require(script.Parent.Records)
 local RobotLibrary = require(script.Parent.RobotLibrary)
 local Rings = require(script.Parent.Rings)
@@ -56,6 +57,8 @@ local rings = Rings.new(world, garage, state, function(mode: string, level: numb
 	records.matchEnded({ mode = mode, level = level, owners = owners, winner = winner })
 	wallet.matchEnded(mode, level, owners, winner)
 end)
+-- The pads in front of the main ring start a fight for whoever stands on them (see Pads).
+Pads.new(state, { seated = rings.seated, request = rings.request, pair = rings.pair })
 game:BindToClose(function()
 	-- Matches already won are reported and nothing after, so the players the shutdown removes forfeit nothing; only then
 	-- is everything written, records and wallets side by side.

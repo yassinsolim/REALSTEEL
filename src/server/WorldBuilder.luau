@@ -123,6 +123,7 @@ local function buildRing(index: number, spec: FoundryLayout.RingSpec, parent: In
 		core:SetAttribute("InRightKick", false)
 		core:SetAttribute("InGuard", false)
 		core:SetAttribute("InDash", false)
+		core:SetAttribute("InGrab", false)
 		Simulation.writeState(core, if slot == 1 then fighterA else fighterB)
 		models[slot] = fighter
 		cores[slot] = core

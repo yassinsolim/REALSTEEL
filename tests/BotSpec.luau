@@ -105,6 +105,7 @@ local function jabMasher(tick: number, me: FightSim.Fighter, foe: FightSim.Fight
 	into.rightKick = false
 	into.guard = false
 	into.dash = false
+	into.grab = false
 end
 
 -- How often a bot of `level` beats the jab masher over `rounds` rounds, taking each side alternately; a draw counts half.
@@ -423,6 +424,134 @@ return function(): (number, { string })
 			"hard punishes a recovering opponent far more than easy",
 			punishes(HARD) > punishes(EASY) * 2,
 			`{punishes(HARD)} vs {punishes(EASY)}`
+		)
+	end
+
+	-- The guard bars and throws: the stronger levels break throws, grab an opponent who only guards, punish a broken
+	-- guard and stop guarding when their own bar is nearly gone.
+	do
+		local throw = FightConfig.Throw
+		-- A grabs B, the bot, from close by; how many of `trials` throws the bot breaks.
+		local function breaksThrows(level: number, trials: number): number
+			local broken = 0
+			for trial = 1, trials do
+				local a, b = pair(0, 2.6)
+				local both = FightSim.newInput()
+				both.jab = true
+				both.straight = true
+				local inputB = FightSim.newInput()
+				local tick = trial * 101 + 7
+				local escaped = false
+				for frame = 1, 80 do
+					tick += 1
+					BotBrain.input(tick, b, a, inputB, level, 2)
+					FightSim.step(a, b, if frame == 1 then both else FightSim.newInput(), inputB)
+					if b.state == State.ThrowBreak then
+						escaped = true
+						break
+					end
+				end
+				if escaped then
+					broken += 1
+				end
+			end
+			return broken
+		end
+		local easyBreaks, mediumBreaks, hardBreaks =
+			breaksThrows(EASY, 40), breaksThrows(MEDIUM, 40), breaksThrows(HARD, 40)
+		check("easy never breaks a throw", easyBreaks == 0, easyBreaks)
+		check("medium breaks some throws", mediumBreaks >= 6 and mediumBreaks <= 24, mediumBreaks)
+		check("hard breaks most throws", hardBreaks >= 16 and hardBreaks > mediumBreaks, hardBreaks)
+
+		-- B only ever guards. Over 20 seconds, how much damage the bot at A deals it (all of it for a knockout) and how
+		-- often it throws it, summed over three different starts.
+		local function versusTurtle(level: number): (number, number)
+			local damage, throws = 0, 0
+			for salt = 1, 3 do
+				local a, b = pair(-3, 3)
+				local inputA = FightSim.newInput()
+				local guarding = FightSim.newInput()
+				guarding.guard = true
+				local wasThrown = false
+				for tick = 1, 1200 do
+					BotBrain.input(tick + salt * 1000, a, b, inputA, level, 1)
+					FightSim.step(a, b, inputA, guarding, { training = false, rounds = true, combat = true })
+					local thrown = b.state == State.Thrown
+					if thrown and not wasThrown then
+						throws += 1
+					end
+					wasThrown = thrown
+					if b.state == State.KO then
+						break
+					end
+				end
+				damage += FightConfig.MaxHp - b.hp
+			end
+			return damage, throws
+		end
+		local easyDamage = versusTurtle(EASY)
+		local mediumDamage = versusTurtle(MEDIUM)
+		local hardDamage, hardThrows = versusTurtle(HARD)
+		check("hard takes apart an opponent who only guards", hardDamage >= 240, hardDamage)
+		check("throwing it among other things", hardThrows >= 3, hardThrows)
+		check(
+			"each level does more to an opponent who only guards",
+			easyDamage < mediumDamage and mediumDamage < hardDamage,
+			`{easyDamage} {mediumDamage} {hardDamage}`
+		)
+
+		-- B's guard has just broken next to A; how often the bot at A lands an attack on it.
+		local function punishesBreak(level: number): number
+			local count = 0
+			for tick = 1, 80 do
+				local a, b = pair(-2.4, 2.4)
+				b.state = State.GuardBreak
+				b.stun = FightConfig.Guard.breakFrames
+				b.stateFrame = 4
+				b.guard = 0
+				local into = FightSim.newInput()
+				BotBrain.input(tick * 31, a, b, into, level, 1)
+				if into.jab or into.straight or into.leftKick or into.rightKick then
+					count += 1
+				end
+			end
+			return count
+		end
+		check(
+			"hard punishes a broken guard far more than easy",
+			punishesBreak(HARD) >= 40 and punishesBreak(EASY) <= 10,
+			`{punishesBreak(HARD)} vs {punishesBreak(EASY)}`
+		)
+
+		-- The straight from "Reading the opponent", read in time, with the bot's bar full or too low to block it.
+		local function guardsWithBar(level: number, bar: number): number
+			local guards = 0
+			for tick = 1, 80 do
+				local a, b = pair(-2.4, 2.4)
+				a.guard = bar
+				b.state = State.Attack
+				b.moveId = FightConfig.StraightMoveId
+				b.stateFrame = 13
+				b.aimX = -1
+				b.aimZ = 0
+				local into = FightSim.newInput()
+				BotBrain.input(tick * 37, a, b, into, level, 1)
+				if into.guard then
+					guards += 1
+				end
+			end
+			return guards
+		end
+		local fullGuards, lowGuards = guardsWithBar(HARD, FightConfig.Guard.max), guardsWithBar(HARD, 60)
+		check(
+			"hard takes a hit rather than block with its bar nearly empty",
+			fullGuards >= 40 and lowGuards == 0,
+			`{fullGuards} -> {lowGuards}`
+		)
+		check(
+			"hard reacts to a throw inside its break window, and easy never does",
+			throw.breakWindow > BotBrain.Levels[HARD].reaction + 3
+				and BotBrain.Levels[EASY].reaction - 2 >= throw.breakWindow
 		)
 	end
 

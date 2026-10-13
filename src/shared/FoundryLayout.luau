@@ -61,9 +61,9 @@ end
 FoundryLayout.Jumbotron = { center = Vector3.new(0, 19.5, 0), width = 12, height = 6 }
 FoundryLayout.PitScreen = { y = 19.5, width = 7.2, height = 3.6 }
 
--- The rings, numbered the same way by the server and every client. The main ring is the centerpiece, where 1v1s are
--- fought and the bots put on exhibitions; the pits take bot matches and training, so practice never waits on a fight in
--- the main ring. Every ring's fight area is the same (FightConfig.RingRadius), so a fight plays the same wherever it is.
+-- The rings, numbered the same way by the server and every client. The main ring is the centerpiece, where 1v1s go first
+-- and the bots put on exhibitions; the pits take bot matches and training first, and 1v1s while the main ring is busy.
+-- Every ring's fight area is the same (FightConfig.RingRadius), so a fight plays the same wherever it is.
 export type RingSpec = {
 	-- Its model under Workspace.Rings, and for a pit, its model in the hall.
 	name: string,
@@ -107,7 +107,7 @@ FoundryLayout.Rings = {
 		center = PIT_ONE,
 		pit = true,
 		booths = pitBooths(PIT_ONE),
-		versus = false,
+		versus = true,
 		solo = true,
 		rank = 1,
 		exhibitions = false,
@@ -119,7 +119,7 @@ FoundryLayout.Rings = {
 		center = PIT_TWO,
 		pit = true,
 		booths = pitBooths(PIT_TWO),
-		versus = false,
+		versus = true,
 		solo = true,
 		rank = 1,
 		exhibitions = false,
@@ -140,12 +140,44 @@ FoundryLayout.Boards = {
 	{ name = "BoardBots", title = "HARD BOT WINS", center = Vector3.new(40, 12.5, -51.65) },
 } :: { Board }
 
--- The pads in front of the ring. Each opens the PLAY card at its own section.
-export type Pad = { name: string, label: string, position: Vector3 }
+-- The pads in front of the main ring, where fights start: stand on one and it asks for a fight once its countdown runs
+-- out (see PadRules). The two 1V1 pads face each other across the walkway and count down once someone stands on each;
+-- whoever is on the blue one takes the first seat, the west booth. Each bot pad fights a bot of its own level, and the
+-- training pad starts training.
+export type PadKind = "versus" | "bot" | "training"
+export type Pad = {
+	name: string,
+	kind: PadKind,
+	-- The bot's level on a bot pad, 0 otherwise.
+	level: number,
+	-- The seat a 1V1 pad's player takes, 0 on the others.
+	seat: number,
+	label: string,
+	position: Vector3,
+}
+-- How far from a pad's middle a character may stand on it.
+FoundryLayout.PadRadius = 2.45
 FoundryLayout.Pads = {
-	{ name = "Bot", label = "FIGHT A BOT", position = Vector3.new(-11, 0, 32) },
-	{ name = "Versus", label = "1V1", position = Vector3.new(0, 0, 32) },
-	{ name = "Training", label = "TRAINING", position = Vector3.new(11, 0, 32) },
+	{ name = "BotEasy", kind = "bot", level = 1, seat = 0, label = "EASY", position = Vector3.new(-27, 0, 30.5) },
+	{
+		name = "BotMedium",
+		kind = "bot",
+		level = 2,
+		seat = 0,
+		label = "MEDIUM",
+		position = Vector3.new(-20.5, 0, 31.75),
+	},
+	{ name = "BotHard", kind = "bot", level = 3, seat = 0, label = "HARD", position = Vector3.new(-14, 0, 33) },
+	{ name = "VersusBlue", kind = "versus", level = 0, seat = 1, label = "1V1", position = Vector3.new(-3.9, 0, 33.2) },
+	{ name = "VersusRed", kind = "versus", level = 0, seat = 2, label = "1V1", position = Vector3.new(3.9, 0, 33.2) },
+	{
+		name = "Training",
+		kind = "training",
+		level = 0,
+		seat = 0,
+		label = "TRAINING",
+		position = Vector3.new(14, 0, 33),
+	},
 } :: { Pad }
 
 -- The garage bays along the west wall. Every player in the server gets one, and their robot stands on its lift facing

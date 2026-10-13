@@ -39,6 +39,7 @@ export type Mod = {
 	dashRecovery: number?,
 	-- What the fighter suffers; see FightConfig.Stats.
 	chipTaken: number?,
+	guardTaken: number?,
 	blockstunTaken: number?,
 	hitstunTaken: number?,
 	knockbackTaken: number?,
@@ -101,13 +102,14 @@ Loadout.Chassis = {
 	{
 		name = "BULWARK",
 		role = "TANK",
-		blurb = "Big, slow and hard to hurt. Guarding costs it nothing.",
+		blurb = "Big, slow and hard to hurt. Blocks cost it no health and less guard.",
 		scale = 1.08,
 		mods = {
 			hp = 1.1,
 			walk = 0.86,
 			dashRecovery = 2,
 			chipTaken = 0,
+			guardTaken = 0.75,
 			moves = { all = { damage = 0.9 } },
 		},
 	},
@@ -284,7 +286,7 @@ local function build(mods: { Mod }): FightConfig.Stats
 	local base = FightConfig.BaseStats
 	local hp, walk, walkBack, strafe, dashSpeed = 1, 1, 1, 1, 1
 	local dashStartup, dashRecovery = 0, 0
-	local chipTaken, blockstunTaken, hitstunTaken, knockbackTaken = 1, 0, 0, 1
+	local chipTaken, guardTaken, blockstunTaken, hitstunTaken, knockbackTaken = 1, 1, 0, 0, 1
 	local totals: { MoveTotals } = {}
 	for index in base.moves do
 		totals[index] = newMoveTotals()
@@ -299,6 +301,7 @@ local function build(mods: { Mod }): FightConfig.Stats
 		dashStartup += mod.dashStartup or 0
 		dashRecovery += mod.dashRecovery or 0
 		chipTaken *= mod.chipTaken or 1
+		guardTaken *= mod.guardTaken or 1
 		blockstunTaken += mod.blockstunTaken or 0
 		hitstunTaken += mod.hitstunTaken or 0
 		knockbackTaken *= mod.knockbackTaken or 1
@@ -328,6 +331,8 @@ local function build(mods: { Mod }): FightConfig.Stats
 			recovery = math.max(move.recovery + change.recovery, MIN_RECOVERY),
 			damage = math.max(round(move.damage * change.damage), 1),
 			chip = move.chip,
+			-- Harder hits wear a guard down faster.
+			guard = round(move.guard * change.damage),
 			reach = roundTo(move.reach * change.reach, 2),
 			hitRadius = roundTo(move.hitRadius * change.hitRadius, 2),
 			hitstun = move.hitstun + change.hitstun,
@@ -351,6 +356,7 @@ local function build(mods: { Mod }): FightConfig.Stats
 		},
 		moves = moves,
 		chipTaken = math.max(chipTaken, 0),
+		guardTaken = math.max(roundTo(guardTaken, 2), 0),
 		blockstunTaken = blockstunTaken,
 		hitstunTaken = hitstunTaken,
 		knockbackTaken = roundTo(knockbackTaken, 2),
@@ -554,6 +560,9 @@ function Loadout.describe(mod: Mod): { Line }
 			if mod.chipTaken == 0 then "No chip damage" else `{percent(mod.chipTaken)} chip damage taken`,
 			mod.chipTaken < 1
 		)
+	end
+	if mod.guardTaken ~= nil then
+		add(`{percent(mod.guardTaken)} guard drain`, mod.guardTaken < 1)
 	end
 	if mod.blockstunTaken ~= nil then
 		add(`{frames(mod.blockstunTaken)} blockstun`, mod.blockstunTaken < 0)

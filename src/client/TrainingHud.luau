@@ -44,11 +44,15 @@ local COLORS: { [string]: Color3 } = {
 	recovery = Color3.fromRGB(80, 130, 235),
 	dash = Color3.fromRGB(170, 110, 230),
 	ko = Color3.fromRGB(10, 10, 10),
+	broken = Color3.fromRGB(255, 70, 110),
+	throw = Color3.fromRGB(255, 150, 230),
 }
 
-local LEGEND_ORDER = { "idle", "guard", "startup", "active", "recovery", "dash", "hitstun", "blockstun" }
+local LEGEND_ORDER =
+	{ "idle", "guard", "startup", "active", "recovery", "dash", "hitstun", "blockstun", "broken", "throw" }
 
-local DUMMY_NAMES = { "Idle", "Guard", "Jab loop", "Straight loop", "Mixed", "Snap kick loop", "Power kick loop" }
+local DUMMY_NAMES =
+	{ "Idle", "Guard", "Jab loop", "Straight loop", "Mixed", "Snap kick loop", "Power kick loop", "Grab loop" }
 
 local function signed(value: number): string
 	return if value > 0 then "+" .. value else tostring(value)
@@ -215,7 +219,7 @@ function TrainingHud.new(parent: ScreenGui, onToggleDetail: () -> ()): TrainingH
 			local dummy = DUMMY_NAMES[args.dummyMode + 1] or "?"
 			pill.Text = if args.compact
 				then `<b>TRAINING</b>  ·  {string.upper(dummy)}`
-				else `<b>TRAINING</b>  ·  DUMMY: {string.upper(dummy)}   ·   T next   R reset   M menu   H data`
+				else `<b>TRAINING</b>  ·  DUMMY: {string.upper(dummy)}   ·   T next   R reset   hold P leave   H data`
 			if not detail then
 				return
 			end
@@ -248,7 +252,9 @@ function TrainingHud.new(parent: ScreenGui, onToggleDetail: () -> ()): TrainingH
 						lines,
 						`LAST MOVE <b>{data.name}</b>  startup {data.startup} active {data.active} recovery {data.recovery}  on hit {signed(
 							data.onHit
-						)}  on block {signed(data.onBlock)}  dmg {data.damage}`
+						)}  on block {signed(data.onBlock)}  dmg {data.damage}  guard {math.floor(
+							data.guard + 0.5
+						)}`
 					)
 				end
 			else

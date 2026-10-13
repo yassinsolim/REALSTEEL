@@ -14,6 +14,7 @@ export type Actions = {
 	rightKick: InputAction,
 	guard: InputAction,
 	dash: InputAction,
+	grab: InputAction,
 }
 
 export type TrainingActions = {
@@ -30,12 +31,17 @@ export type Scripted = {
 	rightKick: InputBinding,
 	guard: InputBinding,
 	dash: InputBinding,
+	grab: InputBinding,
 	next: InputBinding,
 	reset: InputBinding,
 	toggle: InputBinding,
 }
 
 local InputSetup = {}
+
+-- Seconds the leave key (Toggle) has to be held in a ring before the player walks out of a bot match or training, so a
+-- stray tap never ends a fight.
+InputSetup.LeaveHold = 0.6
 
 local function addAction(context: InputContext, name: string, actionType: Enum.InputActionType): InputAction
 	local action = Instance.new("InputAction")
@@ -104,15 +110,20 @@ function InputSetup.build(player: Player)
 	addBinding(dash, "GamepadBumper", Enum.KeyCode.ButtonR1)
 	addBinding(dash, "GamepadTrigger", Enum.KeyCode.ButtonR2)
 
+	-- A grab is both punches together on every device with two punch buttons (see FightSim), so only the touch
+	-- controls need a button of their own for it.
+	addAction(fight, "Grab", Enum.InputActionType.Bool)
+
 	fight.Parent = player
 
 	local training = Instance.new("InputContext")
 	training.Name = "TrainingInputs"
 	addBinding(addAction(training, "Next", Enum.InputActionType.Bool), "Keyboard", Enum.KeyCode.T)
 	addBinding(addAction(training, "Reset", Enum.InputActionType.Bool), "Keyboard", Enum.KeyCode.R)
-	-- Toggle opens the menu.
+	-- Toggle opens the PLAY card in the hall and, held, leaves a bot match or training. It sits on P, well away from the
+	-- punches on J and K.
 	local toggle = addAction(training, "Toggle", Enum.InputActionType.Bool)
-	addBinding(toggle, "Keyboard", Enum.KeyCode.M)
+	addBinding(toggle, "Keyboard", Enum.KeyCode.P)
 	addBinding(toggle, "Gamepad", Enum.KeyCode.ButtonSelect)
 	training.Parent = player
 end
@@ -150,6 +161,7 @@ function InputSetup.find(player: Player): Actions?
 	local rightKick = findAction(context, "RightKick")
 	local guard = findAction(context, "Guard")
 	local dash = findAction(context, "Dash")
+	local grab = findAction(context, "Grab")
 	if
 		move == nil
 		or jab == nil
@@ -158,6 +170,7 @@ function InputSetup.find(player: Player): Actions?
 		or rightKick == nil
 		or guard == nil
 		or dash == nil
+		or grab == nil
 	then
 		return nil
 	end
@@ -169,6 +182,7 @@ function InputSetup.find(player: Player): Actions?
 		rightKick = rightKick,
 		guard = guard,
 		dash = dash,
+		grab = grab,
 	}
 end
 
@@ -200,6 +214,7 @@ function InputSetup.findScripted(player: Player): Scripted?
 	local rightKick = findScriptedBinding(fight, "RightKick")
 	local guard = findScriptedBinding(fight, "Guard")
 	local dash = findScriptedBinding(fight, "Dash")
+	local grab = findScriptedBinding(fight, "Grab")
 	local next = findScriptedBinding(training, "Next")
 	local reset = findScriptedBinding(training, "Reset")
 	local toggle = findScriptedBinding(training, "Toggle")
@@ -211,6 +226,7 @@ function InputSetup.findScripted(player: Player): Scripted?
 		or rightKick == nil
 		or guard == nil
 		or dash == nil
+		or grab == nil
 		or next == nil
 		or reset == nil
 		or toggle == nil
@@ -225,6 +241,7 @@ function InputSetup.findScripted(player: Player): Scripted?
 		rightKick = rightKick,
 		guard = guard,
 		dash = dash,
+		grab = grab,
 		next = next,
 		reset = reset,
 		toggle = toggle,

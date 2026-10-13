@@ -7,10 +7,11 @@ Fighters are five original robots modeled in Blender, one for each chassis (ANVI
 on one skeleton, finished in worn painted metal and animated from the simulation state. Every player fits a robot out in
 the garage: a chassis, a module each for arms, core and legs, and a paint job, and can buy a premium body for any chassis
 (HAYMAKER, BASTION, SPECTRE, RONIN or MONARCH) with Robux or crests with the coins every match pays. There are four
-attacks (a punch and a kick for each side), guard and dash, best-of-three rounds with a clock, a computer opponent at
-three levels, 1v1 versus, a training mode with a frame meter, and touch controls. Players walk around
-THE FOUNDRY, a robot fight club hall with the main ring in its middle, two practice pits beside it, everyone's robots in
-garage bays along one wall, and a line that hands each ring to whoever should have it. Robots wait hanging from winches
+attacks (a punch and a kick for each side), a throw, guard with a guard bar that runs out, and dash, best-of-three rounds
+with a clock, a computer opponent at three levels, 1v1 versus, a training mode with a frame meter, and touch controls.
+Players walk around THE FOUNDRY, a robot fight club hall with the main ring in its middle, two practice pits beside it,
+pads in front of the main ring that start a fight for whoever stands on them, everyone's robots in garage bays along one
+wall, and a line that hands each ring to whoever should have it. Robots wait hanging from winches
 under each ring's screen and are dropped onto the canvas when a match starts; wins go on the players' records, the
 all-time leaderboards hang on the north wall, and whoever holds the champion's title (won and defended in 1v1s) stands
 there as a gold statue.
@@ -31,42 +32,48 @@ Hit effects, lights and sound come with it.
 .\scripts\dev.ps1 validate   # format check, selene, strict typecheck, rojo build of the game and of the checks place
 ```
 
-Open `build\REALSTEEL.rbxlx` in Studio and press Play. You spawn on a catwalk over the hall as your Roblox avatar. **PLAY**
-(or **M**, Select on a gamepad) opens the PLAY card: a bot (EASY, MEDIUM or HARD) for a best-of-three match, TRAINING for a
-dummy with frame data, 1V1 against the next player who joins the line, or GARAGE to build and paint your robot. The three
-pads in front of the main ring open the same card, and your bay along the west wall has a GARAGE prompt by your robot.
+Open `build\REALSTEEL.rbxlx` in Studio and press Play. You spawn on a catwalk over the hall as your Roblox avatar. The
+pads in front of the main ring start a fight when you stand on them: the two 1V1 pads (blue and red) count down from 3
+once someone stands on each, and the BOT EASY, MEDIUM and HARD pads and the TRAINING pad start yours after 2 seconds.
+Step off to cancel. **PLAY** (or **P**, Select on a gamepad) opens the PLAY card with the same choices: a bot (EASY,
+MEDIUM or HARD) for a best-of-three match, TRAINING for a dummy with frame data, 1V1 against the next player who joins
+the line, or GARAGE to build and paint your robot. Your bay along the west wall has a GARAGE prompt by your robot.
 Picking a fight puts you in line: a bot match or training goes to the first free practice pit (or the main ring when both
-pits are busy), a 1v1 to the main ring. When it is your turn your character steps into an operator's booth beside your ring
-and the fight camera swoops over to it. Each match is first to two rounds of 60 seconds; a KO or the clock ends a round
-(more health wins on time), and a drawn round is replayed. The result card offers REMATCH while nobody is waiting for your
-ring and LEAVE THE RING. While nobody wants the main ring, two bots fight an exhibition in it. See The Foundry below for the
-rules of the line.
+pits are busy), a 1v1 to the main ring (or a pit while the main ring is busy). When it is your turn your character steps
+into an operator's booth beside your ring and the fight camera swoops over to it. Each match is first to two rounds of 60
+seconds; a KO or the clock ends a round (more health wins on time), and a drawn round is replayed. The result card offers
+REMATCH while nobody is waiting for your ring and LEAVE THE RING. While nobody wants the main ring, two bots fight an
+exhibition in it. See The Foundry below for the rules of the line.
 
 | Input | Keyboard and mouse | Gamepad | Touch |
 | --- | --- | --- | --- |
 | Walk around the hall | W A S D, Space to jump | Left stick, A | Stick, jump button |
-| PLAY card | M or the PLAY button | Select | PLAY |
-| Pads and the garage at your bay | E at the prompt | X at the prompt | Tap the prompt |
+| PLAY card | P or the PLAY button | Select | PLAY |
+| Start a fight on a pad | Stand on it | Stand on it | Stand on it |
+| Garage at your bay | E at the prompt | X at the prompt | Tap the prompt |
 | Back, forward | A, D | Left stick left, right | Stick, bottom left |
 | Sidestep | W (away from the camera), S (toward it) | Left stick up, down | Stick |
 | Jab (left punch) | Left mouse or J | X | JAB |
 | Straight (right punch) | Right mouse or K | Y | STRAIGHT |
 | Snap kick (left kick) | Q or U | A | SNAP KICK |
 | Power kick (right kick) | E or I | B | POWER KICK |
+| Grab (throw) | Both mouse buttons, or J and K, together | X and Y together | GRAB |
+| Break a throw | Grab within 0.3 s of being caught | X and Y within 0.3 s | GRAB within 0.3 s |
 | Guard (hold) | Left Shift | L1 or L2 | GUARD |
 | Dash | Space, with a direction held (neutral backs off) | R1 or R2 | DASH |
-| Leave a bot match or training | M | Select | MENU |
+| Leave a bot match or training | Hold P | Hold Select | Hold LEAVE |
 | Garage: open, switch page, close | G on the PLAY card or E at your bay; Q E; G or Backspace | GARAGE on the PLAY card; L1 R1; B | GARAGE, tabs, DONE |
 | Training: next dummy, reset | T, R | Not bound yet | DUMMY, RESET (training only) |
-| Card navigation | W S or arrows, Enter, mouse; Esc or M closes | D-pad, A; B closes | Tap |
+| Card navigation | W S or arrows, Enter, mouse; Esc or P closes | D-pad, A; B closes | Tap |
 
 The fight controls read like the screen. The camera always keeps your fighter on the left facing right, so D is always
 toward the opponent and A away, and W and S sidestep into and out of the screen. The four attacks follow the body: left
-and right, punches and kicks. The touch layout puts the four attack buttons in a 2x2 block (punches on top, kicks below),
-with GUARD and DASH beside it and the training buttons in a column at the left edge. MENU (leave) shows in a bot match and
-in training; DUMMY and RESET appear only while training is on. The touch controls belong to the rings: Roblox's own stick
-and jump button come back in the hall, and both hide while a card is up. Your avatar does not walk while a card or the
-garage is up, or while you are in a ring.
+and right, punches and kicks, and both punches at once grab. The menu key sits on P, away from the punches on J and K,
+and leaving a fight takes a 0.6-second hold, so a stray press never ends one. The touch layout puts the four attack
+buttons in a 2x2 block (punches on top, kicks below), with GUARD, DASH and GRAB beside it and the training buttons in a
+column at the left edge. LEAVE (hold) shows in a bot match and in training; DUMMY and RESET appear only while training is
+on. The touch controls belong to the rings: Roblox's own stick and jump button come back in the hall, and both hide while
+a card is up. Your avatar does not walk while a card or the garage is up, or while you are in a ring.
 
 The touch layout appears when Roblox reports touch as the preferred input. Setting the attribute `ForceTouchUI` on the
 local player shows it on a desktop. Tooling is pinned in `rokit.toml` (same versions as OVERLOADED).
@@ -89,13 +96,14 @@ local player shows it on a desktop. Tooling is pinned in `rokit.toml` (same vers
 All timings are simulation frames at 60 per second. Advantage is hitstun (or blockstun) minus active plus recovery,
 because the attacker is committed from the first active frame.
 
-| Move | Startup | Active | Recovery | Damage (chip) | On hit | On block |
-| --- | --- | --- | --- | --- | --- | --- |
-| Jab | 7 | 3 | 11 | 8 (1) | +4 | -1 |
-| Straight | 12 | 3 | 17 | 16 (2) | +2 | -9 |
-| Snap kick | 10 | 3 | 15 | 11 (1) | +2 | -7 |
-| Power kick | 15 | 4 | 22 | 24 (3) | +3 | -14 |
-| Dash | 2 | 8 moving | 7 | | | |
+| Move | Startup | Active | Recovery | Damage (chip) | Guard | On hit | On block |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Jab | 7 | 3 | 11 | 8 (1) | 70 | +4 | -1 |
+| Straight | 12 | 3 | 17 | 16 (2) | 170 | +2 | -9 |
+| Snap kick | 10 | 3 | 15 | 11 (1) | 130 | +2 | -7 |
+| Power kick | 15 | 4 | 22 | 24 (3) | 260 | +3 | -14 |
+| Grab | 10 | 2 | 26 | 18 | | +18 after the throw | cannot be blocked |
+| Dash | 2 | 8 moving | 7 | | | | |
 
 The punches reach farthest (jab and straight connect out to about 4.8 and 5.6 studs between centers). The kicks are
 slower and shorter (about 4.3 and 4.6) but hit harder and shove the target away: the power kick pushes about 2.4 studs,
@@ -107,9 +115,29 @@ the dash covers 3.2 studs in 8 frames, so closing a gap is a decision and not a 
 `src/shared/FightConfig.luau`; the timings were tightened by about a fifth from the first version, and the advantage on hit
 and block did not change.
 
+Nobody can hold the guard up forever:
+
+- **The guard bar.** Under each health bar is a guard bar of 1,200 points. Holding the guard drains 1 point a frame (a full
+  bar lasts 20 seconds with nothing coming in), and every blocked move takes its Guard value on top of that. Once the guard
+  has been down for 45 frames the bar fills back up at 6 points a frame (about four seconds from empty). It turns amber at
+  half and red, pulsing, at a quarter. Blocked back to back, a guard breaks after about seven straights or fifteen jabs.
+  BULWARK's guard drains 25% slower.
+- **Guard break.** When the bar runs out, from a block or from holding on too long, the guard breaks: GUARD BROKEN shows,
+  the robot reels with its arms knocked wide, and it is open for 60 frames (a second), long enough for any attack to land.
+  The blow that broke it freezes the pair 10 frames longer. The bar starts again at half once the break is over or a hit
+  ends it. Chip damage still never knocks anyone out.
+- **The throw.** Both punches together grab (a jab or straight up to 2 frames before the other punch turns into the grab).
+  It catches an opponent no farther than 3.3 studs away in front, who is standing, guarding, dashing, grabbing, guard-broken
+  or finishing an attack. It cannot be blocked, but any attack beats it: an attack on its way out cannot be caught, and the
+  jab lands first, and an opponent in hitstun or blockstun cannot be caught either. Caught, the robot is hoisted overhead
+  and slammed onto its back for 18 damage, slides away and gets up, and the thrower is up 18 frames first. A missed grab
+  is 38 frames of whiffing. Grabbing back within 18 frames (0.3 s) of being caught breaks the throw: both shove each other
+  off and stumble back even, and two grabs that catch each other do the same.
+
 The training overlay shows the table values for your last move, the **measured** advantage of the last exchange taken
-from recorded states, and a frame meter for both fighters. Measured and table values agree for all four attacks, on hit
-and on block, both in the unit checks and live in Studio.
+from recorded states, and a frame meter for both fighters (guard breaks and throws have colors of their own). Measured and
+table values agree for all four attacks, on hit and on block, both in the unit checks and live in Studio. The GRAB LOOP
+dummy walks in and grabs, to practice breaking throws.
 
 ## How it is built
 
@@ -122,7 +150,8 @@ and on block, both in the unit checks and live in Studio.
 | Roblox adapter | `src/shared/Simulation.luau` | Bound with `RunService:BindToSimulation` at 60 Hz on server and client. State lives in attributes on each fighter's `Core` part. Every ring is a fight of its own (`addRing`), and each step advances them all; the server and the clients number the rings alike. |
 | Inputs | `src/shared/InputSetup.luau` | Input Action System contexts created under each Player, plus a Scriptable binding on every action. `FightSim.moveFromStick` turns the screen-style stick reading into walking and sidestepping. |
 | World | `src/server/` | The hall (`Foundry.luau`, `FoundryStations.luau`), the main ring's island and the practice pits (`Arena.luau`) and every ring's fighter cores (`WorldBuilder.luau`, under `Workspace.Rings`) are built from code; `FoundryLayout` (shared) holds the positions the clients need too. `Rings.luau` runs the line for the rings and publishes it, `Ring.luau` seats players in one ring and sets its fight up; `Main.server` wires players to their garage, their bay and the `Menu` remote (bot with a level, training, versus, leave, rematch). See The Foundry. |
-| Ring line | `src/shared/RingQueue.luau` | Pure: who gets which ring next, when a rematch is open, which training has to make room. |
+| Ring line | `src/shared/RingQueue.luau` | Pure: who gets which ring next, how pairs from the 1V1 pads go together, when a rematch is open, which training has to make room. |
+| Pads | `src/shared/PadRules.luau`; `src/server/Pads.luau`; `src/client/PadView.luau` | Pure rules for who holds each pad in front of the main ring and when its countdown runs out; the server reads where characters stand and starts the fights; the client draws names and countdowns. See The Foundry. |
 | Records | `src/shared/Standings.luau`; `src/server/Records.luau` | Pure rules for records, the champion's title and leaderboard order; the server's profiles, DataStore saves, all-time boards and what it publishes on `FoundryState`. See The Foundry. |
 | Winches | `src/shared/Hoist.luau`; `src/client/Cranes.luau` | Pure: how high each ring's robots hang from their winches and where the hooks are, from the ring's match phase and frame; the client draws the cables and hooks. See The Foundry. |
 | Robot art | `art/`, `scripts/art.ps1` | Blender (headless) builds the five robot frames and their worn-metal textures, exports the FBX, and generates `src/shared/RobotRigs.luau`, `RobotClips.luau` and `RobotKits.luau`; the textures are wired up in `RobotWear.model.json`. See Robot art and animation. |
@@ -242,6 +271,12 @@ few frames at a time instead of flickering. It plays by what a person could see:
 - **Keeping the guard up.** Coming out of a hit or a block with the opponent still on top of it, the bot has its guard up
   when the stun ends, so a follow-up timed for the gap is blocked, and it keeps a raised guard while the opponent keeps
   attacking.
+- **Guard bars and throws.** Every level grabs an opponent who sits behind its guard close by, EASY rarely and HARD most,
+  and walks in on one that guards just out of reach. MEDIUM and HARD also mind the bars: they stop guarding once a block
+  would break their own guard (a hit costs less than a break), lean on an opponent whose bar runs low, and land their
+  strongest move on a broken guard. Caught by a grab, MEDIUM breaks about a third of throws and HARD about 60%; EASY reacts
+  too late to break any. Against an opponent who only ever guards, HARD takes a whole health bar off it in 20 seconds,
+  throwing it several times on the way.
 - **Offense and spacing.** It attacks on a timer with a chance per decision, weighted toward the moves that reach, holds a
   poking distance, strafes, dashes across a gap, and leans back toward the middle of the ring near the ropes.
 
@@ -277,9 +312,18 @@ fights' netcode. Three fights can run at once: the main ring and two practice pi
 - **The hall.** You spawn on a catwalk along the south wall that looks over everything; stairs at both ends lead down. The
   main ring stands in the middle on an island ringed by a loop of molten channel under grates, behind a rail with an LED
   line that runs with the crowd's excitement. An invisible wall behind the rail keeps characters out of the fight camera's
-  way. Beside the ring are the two operators' booths, three pads face the catwalk (FIGHT A BOT, 1V1, TRAINING), a
+  way. Beside the ring are the two operators' booths, the pads face the catwalk in front of it (see below), a
   four-sided screen hangs over the ring, and the hall's name is on the north wall. `Foundry.luau` builds it and
   `FoundryLayout` has the numbers.
+- **The pads.** Between the main ring and the catwalk stand six pads: the blue and red 1V1 pads facing each other across
+  the walkway with VS painted between them, three amber bot pads (EASY, MEDIUM, HARD) to the west and a teal TRAINING pad
+  to the east. Standing on one asks for its fight, no menu needed. The 1V1 pads count down from 3 once a different player
+  stands on each, then put the pair in line together: they fight each other, the blue pad's player in the first seat (the
+  west booth). The bot and training pads start their player's fight after 2 seconds. Stepping off cancels; a countdown
+  that has run out is done with its players, who can walk away while they wait, and the pads are free for the next. A pad
+  belongs to whoever stepped on first, and the names and countdowns float over the pads for the whole hall to see.
+  `PadRules` (shared, pure) decides who holds what and when, `Pads` on the server reads where every character stands ten
+  times a second and starts the fights, and `PadView` on the client draws them.
 - **The pits.** Along the east side, past the channel, are PIT 1 and PIT 2: the same canvas, ropes and size as the main
   ring (so a fight plays the same anywhere), in a smaller enclosure with a rail just outside the ropes, a work light, a
   small four-sided screen and a booth on each side. Spectators can stand close, so the fight camera, which reaches over
@@ -290,24 +334,28 @@ fights' netcode. Three fights can run at once: the main ring and two practice pi
   `GarageLoadout` and `GarageLook` attributes). Your own bay has a GARAGE prompt; the garage's close-up frames your robot
   there, and characters nearby are hidden on your screen while it is up. The robot wears every pick at once.
 - **The line.** Players queue for a fight, not a ring (`RingQueue`), and the line hands every free ring to whoever should
-  have it. A 1V1 pairs the two earliest 1V1 players and needs the main ring; a lone 1V1 waiter holds up nobody. A bot match
-  or training goes to the first free pit, or to the main ring when both pits are busy, in line order. Pairs are placed
-  first, since practice can go elsewhere and a 1V1 cannot. When a ring is yours your robot goes in with your garage build
-  and your character stands in one of its booths, held there, while the fight camera swoops over. A finished match stays
-  up for 7 seconds when someone is waiting for that ring and 25 otherwise, which is the window for REMATCH (offered only
-  while nobody waiting would get the ring). Training has no end of its own, but once someone waiting could take its ring
-  it gets 45 more seconds; with several sessions in training, the ones that have run longest make room, one per player
-  waiting. M leaves a bot match or training; LEAVE THE RING on the result card leaves any match.
+  have it. Two players from the 1V1 pads are a pair already and go to the line together; other 1V1 players (from the PLAY
+  card) pair up two by two, earliest first, and a lone 1V1 waiter holds up nobody. A 1v1 takes the main ring, or a pit
+  while the main ring is busy. A bot match or training goes to the first free pit, or to the main ring when both pits are
+  busy, in line order. Pairs are placed first, since practice can go elsewhere. When a ring is yours your robot goes in
+  with your garage build and your character stands in one of its booths, held there, while the fight camera swoops over. A
+  finished match stays up for 7 seconds when someone is waiting for that ring and 25 otherwise, which is the window for
+  REMATCH (offered only while nobody waiting would get the ring). Training has no end of its own, but once someone
+  waiting could take its ring it gets 45 more seconds; with several sessions in training, the ones that have run longest
+  make room, one per player waiting. Holding P leaves a bot match or training; LEAVE THE RING on the result card leaves
+  any match.
 - **Never empty.** Four seconds after the main ring frees up with nobody waiting for it, two bots (MEDIUM or HARD, with
   random ready-made builds) fight an exhibition, named after their builds on the screen. Six seconds after it ends the
   winches hoist the pair away, and four seconds later the next pair is dropped in. Anyone who wants the ring cuts in at
   once.
 - **What the clients are told.** Each ring's own commands stay on its predicted match core. Everything about the line
   lives elsewhere, so it never rolls the clients back: a `FoundryState` folder in ReplicatedStorage with a folder per ring
-  (`Session`, `NextUp`, `RematchOpen`, `HandoverAt`), and on itself `Waiting`, the title (`ChampionId`, `ChampionName`,
-  `ChampionDefenses`) and the boards (`BoardVersus`, `BoardBots` as JSON, `BoardScope`); and attributes on each Player
-  (`QueueMode`, `QueueLevel`, `QueueAhead`, `QueueAlone`, `InRing`, `Ring` for the number of the ring they are in, `Bay`,
-  and `RecordWins`, `RecordLosses`, `RecordHardWins`).
+  (`Session`, `NextUp`, `RematchOpen`, `HandoverAt`), a `Pads` folder with a folder per pad (`Holder`, the UserId on
+  it, and `Ends`, when its countdown runs out in the server's clock), and on itself `Waiting`, the title (`ChampionId`,
+  `ChampionName`, `ChampionDefenses`) and the boards (`BoardVersus`, `BoardBots` as JSON, `BoardScope`); and attributes
+  on each Player (`QueueMode`, `QueueLevel`, `QueueAhead`, `QueueAlone`, `QueueRival` for the player they asked to fight
+  on the 1V1 pads, `InRing`, `Ring` for the number of the ring they are in, `Bay`, and `RecordWins`, `RecordLosses`,
+  `RecordHardWins`).
 - **Seeing it.** Every client draws every ring and predicts all of them (a ring is two fighters, so this is cheap).
   Spectators get the hall: no fight HUD, the screens over the rings (names, health bars, clock, round, next up) and each
   fight's sound fading with distance, the pits' sooner than the main ring's. From a seat, the other rings are only a
@@ -354,7 +402,7 @@ a fight.
 | Chassis | Role | Gives | Costs |
 | --- | --- | --- | --- |
 | ANVIL | all-rounder | the baseline | no trick |
-| BULWARK | tank | +10% health, no chip damage | -14% walking speed, +2 frames dash recovery, -10% damage |
+| BULWARK | tank | +10% health, no chip damage, -25% guard drain | -14% walking speed, +2 frames dash recovery, -10% damage |
 | LANCE | poker | +10% punch reach | punches start 1 frame later, -4% punch and -10% kick damage, -6% health, -3% walking speed |
 | RAZOR | rushdown | +10% walking and dash speed, dash recovers 2 frames faster, jab starts 1 frame sooner | -8% health |
 | MAUL | heavy hitter | +18% damage, +20% knockback, +8% health | every attack starts and recovers 1 frame later, -6% walking speed |
@@ -547,18 +595,24 @@ knuckle plates). The designs are original: robot boxers in general are fair game
 
 ## Tests
 
-- **Unit checks:** `FightSimSpec` covers the fight rules, the stick mapping, all four attacks and their frame data (97 checks).
+- **Unit checks:** `FightSimSpec` covers the fight rules, the stick mapping, all four attacks and their frame data, the
+  guard bar (draining, refilling, breaking from a block or from holding, the break's length and what ends it, BULWARK's
+  slower drain) and the throw (both punches and the grab button, the late second punch, catching a guard, the slam's
+  damage and the frame advantage, the whiff, breaking free in time and not after, strikes beating grabs, who can and
+  cannot be caught, grabs catching each other, knockouts and training) (135 checks).
   `RobotSpec` covers every frame's rig data (known roles, the shared skeleton, the rest pose, mirrored joints and left and
-  right twin parts, the armor the effects aim at), a frame for every chassis, the clips, the animator, the crests (their
-  data, symmetry and where they sit at each chassis' size) and, for every move, that the limb the move names reaches the
-  hit range during the active frames on every chassis' own frame and every premium body at the chassis' size, that the
-  other limb does it when the robot is drawn as a southpaw, and that every frame is uploaded and has its worn textures for
-  every paint finish (145 checks).
+  right twin parts, the armor the effects aim at), a frame for every chassis, the clips, the animator (including the guard
+  break, grab, throw, thrown and broken-throw clips, a robot thrown out staying down, and the grab reaching out with both
+  hands), the crests (their data, symmetry and where they sit at each chassis' size) and, for every move, that the limb the
+  move names reaches the hit range during the active frames on every chassis' own frame and every premium body at the
+  chassis' size, that the other limb does it when the robot is drawn as a southpaw, and that every frame is uploaded and
+  has its worn textures for every paint finish (152 checks).
   `BotSpec` covers the round flow (intro, clock, KO, time-up, draws, best of three, rematch, and who has won a match that
   is torn down during its last knockout), that the bot is a pure function of its inputs, that each level reads and
   punishes the way it should, that the stronger levels fire at a walker, guard coming out of a stun and punish a dash,
-  that a jab masher loses to EASY and not to HARD, that a whole bot-vs-bot match finishes, and that the levels are
-  ordered (64 checks).
+  that they break throws (EASY never), take apart an opponent who only guards, punish a broken guard and stop blocking
+  when a block would break them, that a jab masher loses to EASY and not to HARD, that a whole bot-vs-bot match
+  finishes, and that the levels are ordered (73 checks).
   `LoadoutSpec` covers the garage's data: the catalog, the codes (all 135 loadouts and every paint code survive a round
   trip, nonsense reads as the stock ANVIL), the stats each part derives, the plain-language gain and cost lines, build names,
   that the simulation, the frame data and the bot play each fighter by its own stats, that a timed-out round goes to the
@@ -568,14 +622,24 @@ knuckle plates). The designs are original: robot boxers in general are fair game
   `QueueSpec` covers the line for the rings, on one ring and on the hall's three: a bot match starting at once, a 1v1
   pairing the two earliest 1v1 players in order, a lone 1v1 waiter not holding up the line, changing what you wait for
   keeping your place, leaving the game ending the session in your ring and no other, practice filling the pits before the
-  main ring, a pair taking the main ring before earlier practice and never a pit, places in line counted per kind of fight,
-  when each ring's rematch is open, and which training sessions get a deadline (74 checks).
-  `LayoutSpec` covers where things stand in the hall (`FoundryLayout`): the main ring is numbered first and only it hosts
-  1v1s and exhibitions, every ring's fight camera stays inside the walls and clear of the columns, booths stand outside
-  their ring's rail, inside the hall and clear of the columns, facing their ring, pits stay clear of the molten channel,
-  rings keep a walkway between their rails, pads, bays and the spawn stay out of the fights' way, the champion's statue
-  and the leaderboards stand clear of the fights, the channel, the columns and the hall's name, and every ring's winches
-  leave room to lower the tallest build (100 checks).
+  main ring, a pair taking the main ring before earlier practice, places in line counted per kind of fight, when each
+  ring's rematch is open, which training sessions get a deadline, pairs from the 1V1 pads fighting each other in seat
+  order and taking their place where the later of the two stands, a partner leaving or asking for something else
+  leaving the other waiting for anyone, a pair stepping onto the other pads keeping its place in the new seats, and, with
+  every ring hosting 1v1s, a pair taking the main ring and the next one a pit (96 checks).
+  `LayoutSpec` covers where things stand in the hall (`FoundryLayout`): the main ring is numbered first and hosts the
+  exhibitions, every ring hosts 1v1s and practice (1v1s going to the main ring first), every ring's fight camera stays
+  inside the walls and clear of the columns, booths stand outside their ring's rail, inside the hall and clear of the
+  columns, facing their ring, pits stay clear of the molten channel, rings keep a walkway between their rails, pads, bays
+  and the spawn stay out of the fights' way, the pads (a 1V1 pad for each seat, the first seat's on the west like its
+  booth, a bot pad for every level and one for training) neither touch nor reach the channel, the champion's statue and
+  the leaderboards stand clear of the fights, the channel, the columns and the hall's name, and every ring's winches
+  leave room to lower the tallest build (134 checks).
+  `PadSpec` covers the pads (`PadRules`): a pad taken by stepping on its edge, its countdown running down and cancelled by
+  stepping off, a bot pad asking for its level and a training pad for training once, the pad then free for the next
+  player while the first still stands there, stepping off and on counting again, the first one on keeping it, players in
+  a ring holding none and players who leave forgotten, and the 1V1 pads counting down only with a different player on
+  each, starting over for a new challenger and asking for a 1v1 in seat order (28 checks).
   `StandingsSpec` covers records (counting, saving, reading damaged saves, adding what was won while a save loaded), what
   a save keeps of the batches added to it (each server's latest, so a retried batch is recognized however many others
   were written since, with only so many servers kept), the champion's title (claimed, defended, taken, left alone by
@@ -587,12 +651,12 @@ knuckle plates). The designs are original: robot boxers in general are fair game
   sends the hook down before hoisting (back up again, without a jump, for a taller robot swapped in meanwhile), and that
   a called-off drop, a match starting mid-hoist, a rollback or a long frame never makes anything jump or land twice (48
   checks).
-  `FightSimSpec`, `BotSpec`, `LoadoutSpec`, `QueueSpec`, `LayoutSpec`, `StandingsSpec` and `HoistSpec` need no Studio, so
-  `.\scripts\run-specs.ps1 -Luau <path to luau.exe>` runs them with the standalone interpreter (it stands in a small
-  Vector3, CFrame and Vector2 for the layout). Run any of them in Studio's command bar with
+  `FightSimSpec`, `BotSpec`, `LoadoutSpec`, `QueueSpec`, `LayoutSpec`, `PadSpec`, `StandingsSpec` and `HoistSpec` need no
+  Studio, so `.\scripts\run-specs.ps1 -Luau <path to luau.exe>` runs them with the standalone interpreter (it stands in a
+  small Vector3, CFrame and Vector2 for the layout). Run any of them in Studio's command bar with
   `require(game.ReplicatedStorage.Tests.BotSpec)()` (or `RobotSpec`, `FightSimSpec`, `LoadoutSpec`, `QueueSpec`,
-  `LayoutSpec`, `StandingsSpec`, `HoistSpec`); it returns the pass count and failures. Clone the module first to avoid a
-  cached result after edits.
+  `LayoutSpec`, `PadSpec`, `StandingsSpec`, `HoistSpec`); it returns the pass count and failures. Clone the module first
+  to avoid a cached result after edits.
 - **Garage screen:** `GarageSpec` needs Studio in Edit mode, because it lays real UI out. It checks what each button does, that
   the panel sends a pick once and again until the server agrees, that quick picks go as one, that a pick the server never
   confirms is given up and a saved garage that arrives late is followed, and, on a desktop view, a phone and a tall narrow
@@ -726,7 +790,11 @@ real controller), real-device performance, and the one or two predicted hits per
    cosmetic and are sold directly, never as loot boxes. Try a test purchase in Studio on the published place (free there):
    the local checks place is not tied to the experience, so Roblox will not prompt a purchase in it.
 5. Add a launcher and juggle rules, wall interactions, and crouching or airborne states (the sim has no hit height yet, so
-   there are no lows or overheads). Each new move needs a clip in `art/poses.py`; `RobotSpec` fails until the clip exists
-   and its striking hand reaches the hit range.
-6. Art: a hand-polished animation pass (the five frames share ANVIL's clips), module visuals designed for each frame, and
+   there are no lows or overheads; the guard bar and the throw are what keep a guard honest for now). Tune the guard bar
+   and the throw by playing: `FightConfig.Guard` and `FightConfig.Throw`. Each new move needs a clip in `art/poses.py`;
+   `RobotSpec` fails until the clip exists and its striking hand reaches the hit range.
+6. Try the pads with two people on the published place: the 1V1 countdown, the pair going to a pit while the main ring
+   is busy, and walking away from a pad once its countdown has run out. The multiplayer checks in `StudioChecks` still
+   queue through the PLAY card, not the pads.
+7. Art: a hand-polished animation pass (the five frames share ANVIL's clips), module visuals designed for each frame, and
    custom sound design in place of the stock effects.

@@ -333,6 +333,49 @@ return function(): (number, { string })
 		check("blockstun plays the block reaction", clipFor(fighterIn(State.Blockstun, { stun = 14 })) == "Block")
 		check("dash plays the dash", clipFor(fighterIn(State.Dash, { dashFwd = 1 })) == "Dash")
 		check("knockout plays the fall", clipFor(fighterIn(State.KO)) == "Ko")
+		check(
+			"a broken guard plays the stagger",
+			clipFor(fighterIn(State.GuardBreak, { stun = FightConfig.Guard.breakFrames })) == "GuardBreak"
+		)
+		check("a grab plays the grab", clipFor(fighterIn(State.Grab)) == "Grab")
+		check("throwing plays the throw", clipFor(fighterIn(State.Throw, { stun = FightConfig.Throw.hold })) == "Throw")
+		check(
+			"being thrown plays the fall",
+			clipFor(fighterIn(State.Thrown, { stun = FightConfig.Throw.down })) == "Thrown"
+		)
+		check(
+			"a broken throw plays the shove",
+			clipFor(fighterIn(State.ThrowBreak, { stun = FightConfig.Throw.breakFrames })) == "ThrowBreak"
+		)
+		do
+			-- Knocked out by the slam, a robot stays down on its back instead of standing up to fall again.
+			local throw = FightConfig.Throw
+			local thrown = fighterIn(State.Thrown, { stun = throw.down, stateFrame = throw.slam })
+			local animator = RobotAnimator.new(rig, clips)
+			RobotAnimator.update(animator, thrown, 1, 0, 1 / 60)
+			thrown.state = State.KO
+			thrown.stateFrame = 30
+			RobotAnimator.update(animator, thrown, 1, 0, 1)
+			local pelvis = rig.jointIndex.Pelvis
+			check(
+				"a robot thrown out stays down",
+				animator.clipKey == "Thrown" and math.abs(animator.pose.rot[pelvis].X - math.rad(88)) < 0.05,
+				animator.clipKey
+			)
+		end
+		do
+			-- Both hands reach out to where a caught opponent stands at the far end of the grab's range, and stop at its
+			-- shoulders rather than reaching through it.
+			local throw = FightConfig.Throw
+			local needed = throw.range - DEFENDER_FRONT_DEPTH - 0.3
+			local left = strikerFront("Grab", 1.5, "HandL")
+			local right = strikerFront("Grab", 1.5, "HandR")
+			check(
+				"the grab reaches out with both hands to the opponent's shoulders",
+				left >= needed and right >= needed and left <= throw.range and right <= throw.range,
+				`{left} {right}`
+			)
+		end
 
 		-- Facing +X, the fighter's right is +Z. An attack aimed 30 degrees to the right turns the robot right.
 		local function strikeYaw(aimX: number, aimZ: number): number

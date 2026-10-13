@@ -10,7 +10,9 @@
 -- The three levels differ in reaction time, how much they pressure, how well they punish mistakes and how often they make
 -- one themselves. The stronger ones also play the neutral game: they fire at an opponent walking into range, aimed at
 -- where it will be, hit one that cannot defend itself, come out of a stun with the guard up and follow a helpless
--- opponent in. Without that a player who just mashes the jab beats every level.
+-- opponent in. Without that a player who just mashes the jab beats every level. They also mind the guard bars: they
+-- grab an opponent who hides behind its guard, lean on one whose bar runs low, punish a broken guard, break throws in
+-- time, and stop blocking once a block would break their own guard.
 
 local FightConfig = require(script.Parent.FightConfig)
 local FightSim = require(script.Parent.FightSim)
@@ -49,6 +51,13 @@ export type Level = {
 	stick: number,
 	-- Chance to hit an opponent that cannot defend itself: just hit into hitstun, or recovering from a dash.
 	follow: number,
+	-- Chance per decision to grab an opponent hiding behind its guard close by, and to walk in for one.
+	grab: number,
+	-- Chance to grab back in time when it is caught, once it has noticed (after `reaction` frames).
+	breakThrow: number,
+	-- Whether it minds the guard bars: it lets its guard down when its own bar is low, and leans on an opponent whose bar
+	-- is. 0 never, 1 always.
+	guardSense: number,
 	-- Relative weights of jab, straight, snap kick and power kick.
 	mix: { number },
 }
@@ -75,6 +84,9 @@ BotBrain.Levels = {
 		guardOut = 0,
 		stick = 0,
 		follow = 0,
+		grab = 0.04,
+		breakThrow = 0,
+		guardSense = 0,
 		mix = { 6, 2, 2, 1 },
 	},
 	{
@@ -96,6 +108,9 @@ BotBrain.Levels = {
 		guardOut = 0.25,
 		stick = 0.2,
 		follow = 0.5,
+		grab = 0.18,
+		breakThrow = 0.35,
+		guardSense = 0.5,
 		mix = { 4, 3, 2, 2 },
 	},
 	{
@@ -117,6 +132,9 @@ BotBrain.Levels = {
 		guardOut = 0.6,
 		stick = 0.3,
 		follow = 0.6,
+		grab = 0.32,
+		breakThrow = 0.6,
+		guardSense = 1,
 		mix = { 4, 3, 2, 3 },
 	},
 } :: { Level }
@@ -191,6 +209,7 @@ local function clear(into: FightSim.Input)
 	into.rightKick = false
 	into.guard = false
 	into.dash = false
+	into.grab = false
 end
 
 -- Picks one of the moves that reaches `dist`, weighted by the level's mix. `roll` is a value in [0, 1). A foe closing
@@ -239,6 +258,17 @@ function BotBrain.input(
 		return
 	end
 	local level = BotBrain.Levels[math.clamp(math.floor(levelIndex), 1, BotBrain.LevelCount)]
+	local throw = FightConfig.Throw
+
+	-- Caught by a grab: once it has noticed, grab back, if it is quick enough to make the window and sure enough to try.
+	if me.state == State.Thrown then
+		local seed = tick - me.stateFrame
+		local react = level.reaction + math.floor(hash(seed, salt + 53) * 5) - 2
+		if me.stateFrame == react and react < throw.breakWindow and hash(seed, salt + 57) < level.breakThrow then
+			into.grab = true
+		end
+		return
+	end
 
 	local dx = foe.x - me.x
 	local dz = foe.z - me.z
@@ -263,6 +293,11 @@ function BotBrain.input(
 	local foeDash = foe.stats.dash
 	-- How close the opponent has to be to threaten the bot with something.
 	local threatRange = longestReach(foe.stats)
+	-- A bot that minds the guard bars stops leaning on its guard once its own bar runs low, and leans on an opponent
+	-- whose bar is.
+	local guardMax = FightConfig.Guard.max
+	local guardLow = me.guard < guardMax * 0.3 and hash(tick // 30, salt + 61) < level.guardSense
+	local foeGuardLow = foe.guard < guardMax * 0.45 and level.guardSense > 0
 
 	-- Reading what the opponent is doing.
 	if foe.state == State.Attack then
@@ -280,7 +315,16 @@ function BotBrain.input(
 				local react = level.reaction + math.floor(hash(seed, salt + 3) * 5) - 2
 				if f >= react then
 					local r = hash(seed, salt)
-					if r < level.guardSeen then
+					-- A block that would empty the bar is worse than the hit, so a bot that minds the bar backs off
+					-- instead while there is time, and otherwise takes it.
+					local wouldBreak = level.guardSense > 0
+						and me.guard <= FightSim.guardDamageFor(move, me.stats) + (move.startup - f + 2)
+					if r < level.guardSeen and wouldBreak then
+						if move.startup - f >= 5 then
+							into.dash = true
+							return
+						end
+					elseif r < level.guardSeen then
 						into.guard = true
 						return
 					elseif r < level.guardSeen + level.dodgeSeen and move.startup - f >= 5 then
@@ -330,14 +374,17 @@ function BotBrain.input(
 	local foeBusy = foe.state == State.Hitstun or foe.state == State.Blockstun
 	local foeGuarding = foe.state == State.Guard or foe.state == State.Blockstun
 
-	-- The opponent cannot defend itself, because it was just hit or is recovering from a dash: land the strongest move
-	-- that arrives before it is back on its feet, or a jab to keep it under pressure.
+	-- The opponent cannot defend itself, because it was just hit, its guard broke or it is recovering from a dash: land
+	-- the strongest move that arrives before it is back on its feet, or a jab to keep it under pressure.
 	if ready and level.follow > 0 then
 		local left = 0
 		local seed = 0
 		if foe.state == State.Hitstun then
 			left = foe.stun - foe.stateFrame
 			seed = tick - foe.stateFrame
+		elseif foe.state == State.GuardBreak then
+			left = foe.stun - foe.stateFrame
+			seed = tick - foe.stateFrame + 13
 		elseif foe.state == State.Dash and foe.stateFrame > foeDash.startup + foeDash.travel then
 			left = foeDash.startup + foeDash.travel + foeDash.recovery - foe.stateFrame
 			seed = tick - foe.stateFrame + 7
@@ -382,8 +429,9 @@ function BotBrain.input(
 	end
 
 	-- Keeping the guard up: coming out of a hit or a block with the opponent still on top of it, so the follow-up that
-	-- was timed for the gap is blocked, and once it is up, for as long as the opponent keeps attacking.
-	if dist <= threatRange + 0.6 then
+	-- was timed for the gap is blocked, and once it is up, for as long as the opponent keeps attacking. Not with the
+	-- bar nearly empty: a broken guard costs more than a hit.
+	if dist <= threatRange + 0.6 and not guardLow then
 		local hold = 0
 		local key = 0
 		if stunned and (foe.state == State.Attack or foeFree) then
@@ -402,16 +450,30 @@ function BotBrain.input(
 	-- Anticipation: when the opponent is free and close, or attacking from close by, sometimes just keep the guard up
 	-- for a while.
 	local hunch = if foeFree then level.preGuard elseif foe.state == State.Attack then level.wary else 0
-	if hunch > 0 and dist <= threatRange + 0.4 then
+	if hunch > 0 and dist <= threatRange + 0.4 and not guardLow then
 		if hash(epoch, salt + 303) < hunch then
 			into.guard = true
 			return
 		end
 	end
 
-	-- Attacking.
-	local chance = level.aggression * (if foeGuarding then 0.55 else 1) * (if foeBusy then 1.3 else 1)
-	if ready and inEpoch == attackAt and hash(epoch, salt) < chance then
+	-- An opponent hiding behind its guard is grabbed once it is close enough.
+	if
+		ready
+		and foe.state == State.Guard
+		and dist <= throw.range - 0.25
+		and inEpoch == attackAt
+		and hash(epoch, salt + 71) < level.grab
+	then
+		into.grab = true
+		return
+	end
+
+	-- Attacking. Strikes into a guard are wasted unless its bar is running out, and an opponent being thrown cannot be
+	-- hit at all.
+	local intoGuard = if foeGuardLow then 1.2 else 0.55
+	local chance = level.aggression * (if foeGuarding then intoGuard else 1) * (if foeBusy then 1.3 else 1)
+	if ready and inEpoch == attackAt and foe.state ~= State.Thrown and hash(epoch, salt) < chance then
 		local moveId: number?
 		if hash(epoch, salt + 505) < level.mistake then
 			-- A wasted attack: any move, whether or not it reaches.
@@ -440,6 +502,8 @@ function BotBrain.input(
 	if level.follow > 0 and dist > ideal - 0.9 then
 		local helpless = foe.state == State.Hitstun
 			or foe.state == State.Blockstun
+			or foe.state == State.GuardBreak
+			or foe.state == State.Thrown
 			or (foe.state == State.Dash and foe.stateFrame > foeDash.startup + foeDash.travel)
 		if foe.state == State.Attack then
 			local move = foe.stats.moves[foe.moveId]
@@ -448,6 +512,10 @@ function BotBrain.input(
 		if helpless then
 			forward = 1
 		end
+	end
+	-- An opponent sitting behind its guard just out of reach of a grab is walked in on.
+	if foe.state == State.Guard and dist > throw.range - 0.4 and hash(epoch, salt + 73) < level.grab * 2 then
+		forward = 1
 	end
 	local side = 0
 	local drift = hash(epoch, salt + 707)

@@ -86,6 +86,14 @@ function Simulation.readState(core: Instance, into: FightSim.Fighter): boolean
 	into.dashFwd = readNumber(core, "DashFwd")
 	into.dashSide = readNumber(core, "DashSide")
 	into.healDelay = readNumber(core, "HealDelay")
+	local guard = core:GetAttribute("Guard")
+	into.guard = if type(guard) == "number" then guard else FightConfig.Guard.max
+	into.guardDelay = readNumber(core, "GuardDelay")
+	local jabAge = core:GetAttribute("JabAge")
+	local straightAge = core:GetAttribute("StraightAge")
+	into.jabAge = if type(jabAge) == "number" then jabAge else FightSim.AgeCap
+	into.straightAge = if type(straightAge) == "number" then straightAge else FightSim.AgeCap
+	into.prevGrab = readBool(core, "PrevGrab")
 	-- The server sets the loadout before it starts a match, so it is a command like AiMode, not something the step writes.
 	into.stats = Loadout.stats(core:GetAttribute("Loadout"))
 	return true
@@ -115,6 +123,11 @@ function Simulation.writeState(core: Instance, from: FightSim.Fighter)
 	core:SetAttribute("DashFwd", from.dashFwd)
 	core:SetAttribute("DashSide", from.dashSide)
 	core:SetAttribute("HealDelay", from.healDelay)
+	core:SetAttribute("Guard", from.guard)
+	core:SetAttribute("GuardDelay", from.guardDelay)
+	core:SetAttribute("JabAge", from.jabAge)
+	core:SetAttribute("StraightAge", from.straightAge)
+	core:SetAttribute("PrevGrab", from.prevGrab)
 end
 
 -- The round and match state shares the match core with the commands. The simulation owns these attributes.
@@ -205,6 +218,7 @@ local function readInput(
 		into.rightKick = actions.rightKick:GetState() :: boolean
 		into.guard = actions.guard:GetState() :: boolean
 		into.dash = actions.dash:GetState() :: boolean
+		into.grab = actions.grab:GetState() :: boolean
 		return
 	end
 
@@ -222,6 +236,7 @@ local function readInput(
 		into.rightKick = readBool(slot.core, "InRightKick")
 		into.guard = readBool(slot.core, "InGuard")
 		into.dash = readBool(slot.core, "InDash")
+		into.grab = readBool(slot.core, "InGrab")
 	else
 		into.moveX = 0
 		into.moveZ = 0
@@ -231,6 +246,7 @@ local function readInput(
 		into.rightKick = false
 		into.guard = false
 		into.dash = false
+		into.grab = false
 	end
 end
 
@@ -243,6 +259,7 @@ local function clearInput(input: FightSim.Input)
 	input.rightKick = false
 	input.guard = false
 	input.dash = false
+	input.grab = false
 end
 
 -- One step of one ring's fight. `frame` is the step's clock for the scripted dummy.

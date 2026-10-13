@@ -16,6 +16,7 @@
         "GarageServerSpec": { "$path": "GarageServerSpec.luau" },
         "QueueSpec": { "$path": "QueueSpec.luau" },
         "LayoutSpec": { "$path": "LayoutSpec.luau" },
+        "PadSpec": { "$path": "PadSpec.luau" },
         "StandingsSpec": { "$path": "StandingsSpec.luau" },
         "HoistSpec": { "$path": "HoistSpec.luau" },
         "RecordsSpec": { "$path": "RecordsSpec.luau" },

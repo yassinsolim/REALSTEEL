@@ -11,8 +11,8 @@ local RobotSkeleton = require(script.Parent.RobotSkeleton)
 export type Animator = {
 	rig: RobotSkeleton.Rig,
 	clips: { [string]: RobotSkeleton.Clip },
-	-- What is playing, for tests and debugging: Idle, Walk, Guard, a move's clip, HitLight, HitHeavy, Block, Dash, Ko or
-	-- an emote.
+	-- What is playing, for tests and debugging: Idle, Walk, Guard, a move's clip, HitLight, HitHeavy, Block, Dash, Ko,
+	-- GuardBreak, Grab, Throw, Thrown, ThrowBreak or an emote.
 	clipKey: string,
 	pose: RobotSkeleton.Pose,
 	from: RobotSkeleton.Pose,
@@ -22,6 +22,8 @@ export type Animator = {
 	blendDuration: number,
 	walkPhase: number,
 	idleTime: number,
+	-- Knocked out by a throw: the robot stays where the slam left it instead of playing the knockdown.
+	downFromThrow: boolean,
 }
 
 local RobotAnimator = {}
@@ -47,6 +49,11 @@ local BLEND = {
 	Intro = 0.25,
 	Victory = 0.18,
 	Slump = 0.4,
+	GuardBreak = 0.03,
+	Grab = 0.05,
+	Throw = 0.04,
+	Thrown = 0.03,
+	ThrowBreak = 0.03,
 }
 
 local DASH_CLIPS = { "DashF", "DashB", "DashL", "DashR" }
@@ -65,11 +72,18 @@ function RobotAnimator.new(rig: RobotSkeleton.Rig, clips: { [string]: RobotSkele
 		blendDuration = 0,
 		walkPhase = 0,
 		idleTime = 0,
+		downFromThrow = false,
 	}
 end
 
 local function smooth(t: number): number
 	return t * t * (3 - 2 * t)
+end
+
+-- How far toward its locked aim a move turns the robot at phase position `u` (0 to 3): in as it builds, out as it
+-- recovers.
+local function aimWeight(u: number): number
+	return if u < 1 then smooth(u) elseif u <= 2 then 1 else 1 - smooth(u - 2)
 end
 
 -- Four directional clips blended by how much of the movement points that way. weights: forward, back, left, right.
@@ -109,15 +123,38 @@ function RobotAnimator.update(
 	local key = "Idle"
 	local aimYaw = 0
 
+	if state ~= FightSim.State.KO then
+		self.downFromThrow = false
+	end
 	if state == FightSim.State.KO then
-		key = "Ko"
-		RobotSkeleton.sample(self.clips.Ko, fighter.stateFrame / FightConfig.SimHz, self.target)
+		if self.clipKey == "Thrown" or self.downFromThrow then
+			-- Slammed to the canvas for good: it stays down where it landed.
+			self.downFromThrow = true
+			key = "Thrown"
+			RobotSkeleton.sample(self.clips.Thrown, 0.6, self.target)
+		else
+			key = "Ko"
+			RobotSkeleton.sample(self.clips.Ko, fighter.stateFrame / FightConfig.SimHz, self.target)
+		end
 	elseif state == FightSim.State.Hitstun then
 		key = if fighter.stun >= HEAVY_STUN then "HitHeavy" else "HitLight"
 		RobotSkeleton.sample(self.clips[key], fighter.stateFrame / math.max(fighter.stun, 1), self.target)
 	elseif state == FightSim.State.Blockstun then
 		key = "Block"
 		RobotSkeleton.sample(self.clips.Block, fighter.stateFrame / math.max(fighter.stun, 1), self.target)
+	elseif
+		state == FightSim.State.GuardBreak
+		or state == FightSim.State.Throw
+		or state == FightSim.State.Thrown
+		or state == FightSim.State.ThrowBreak
+	then
+		-- Each runs its course over the frames the simulation gives it.
+		key = if state == FightSim.State.GuardBreak
+			then "GuardBreak"
+			elseif state == FightSim.State.Throw then "Throw"
+			elseif state == FightSim.State.Thrown then "Thrown"
+			else "ThrowBreak"
+		RobotSkeleton.sample(self.clips[key], fighter.stateFrame / math.max(fighter.stun, 1), self.target)
 	elseif state == FightSim.State.Guard then
 		key = "Guard"
 		RobotSkeleton.sample(self.clips.Guard, 0, self.target)
@@ -126,18 +163,25 @@ function RobotAnimator.update(
 		local dash = fighter.stats.dash
 		local u = fighter.stateFrame / (dash.startup + dash.travel + dash.recovery)
 		sampleDirectional(self, DASH_CLIPS, directionWeights(fighter.dashFwd, fighter.dashSide), u)
-	elseif state == FightSim.State.Attack and fighter.stats.moves[fighter.moveId] ~= nil then
-		local move = fighter.stats.moves[fighter.moveId]
-		key = move.clip
-		local phase, progress = FightSim.attackPhase(fighter)
+	elseif
+		(state == FightSim.State.Attack and fighter.stats.moves[fighter.moveId] ~= nil)
+		or state == FightSim.State.Grab
+	then
+		local phase, progress
+		if state == FightSim.State.Grab then
+			key = "Grab"
+			phase, progress = FightSim.grabPhase(fighter)
+		else
+			key = fighter.stats.moves[fighter.moveId].clip
+			phase, progress = FightSim.attackPhase(fighter)
+		end
 		local u = (PHASE_INDEX[phase :: string] or 0) + progress
 		RobotSkeleton.sample(self.clips[key] or self.clips.Jab, u, self.target)
 
-		-- The punch follows the aim locked when it started: turn toward it as the move builds, back out as it recovers.
+		-- The move follows the aim locked when it started: turn toward it as the move builds, back out as it recovers.
 		local aimForward = fighter.aimX * facingX + fighter.aimZ * facingZ
 		local aimRight = fighter.aimX * rightX + fighter.aimZ * rightZ
-		local weight = if u < 1 then smooth(u) elseif u <= 2 then 1 else 1 - smooth(u - 2)
-		aimYaw = math.atan2(-aimRight, aimForward) * weight
+		aimYaw = math.atan2(-aimRight, aimForward) * aimWeight(u)
 	else
 		local forward = fighter.vx * facingX + fighter.vz * facingZ
 		local side = fighter.vx * rightX + fighter.vz * rightZ

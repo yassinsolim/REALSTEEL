@@ -39,6 +39,9 @@
         "LayoutSpec": {
           "$path": "tests/LayoutSpec.luau"
         },
+        "PadSpec": {
+          "$path": "tests/PadSpec.luau"
+        },
         "StandingsSpec": {
           "$path": "tests/StandingsSpec.luau"
         },

@@ -1,7 +1,8 @@
 --!strict
 
--- On-screen controls for touch: a movement stick, four action buttons, and small training buttons. They drive the same
--- actions as every other device through the Scriptable bindings, so prediction and replication need no special case.
+-- On-screen controls for touch: a movement stick, four action buttons with guard, dash and grab beside them, and small
+-- training buttons. They drive the same actions as every other device through the Scriptable bindings, so prediction and
+-- replication need no special case.
 
 local UserInputService = game:GetService("UserInputService")
 
@@ -13,7 +14,7 @@ export type TouchControls = {
 	setVisible: (visible: boolean) -> (),
 	-- DUMMY and RESET only make sense in training.
 	setTrainingVisible: (visible: boolean) -> (),
-	-- MENU opens the menu, so it stays available while you are the only human playing.
+	-- LEAVE, held, leaves a bot match or training, so it stays available while you are the only human playing.
 	setModeVisible: (visible: boolean) -> (),
 }
 
@@ -192,13 +193,15 @@ local function createButton(
 	return button, release
 end
 
--- Training actions only need a short press; the server reads their state on its next frames.
+-- Training actions only need a short press; the server reads their state on its next frames. One that has to be held
+-- (leaving the ring) stays pressed for as long as the finger is down.
 local function createTapButton(
 	parent: Instance,
 	name: string,
 	text: string,
 	order: number,
-	binding: InputBinding
+	binding: InputBinding,
+	hold: boolean?
 ): TextButton
 	local button = Instance.new("TextButton")
 	button.Name = name
@@ -213,6 +216,23 @@ local function createTapButton(
 	button.Font = Enum.Font.GothamBold
 	button.TextSize = 11
 	button.Parent = parent
+	if hold then
+		local pressed: InputObject? = nil
+		button.InputBegan:Connect(function(input: InputObject)
+			if pressed == nil and isPointer(input) then
+				pressed = input
+				binding:Fire(true)
+			end
+		end)
+		UserInputService.InputEnded:Connect(function(input: InputObject)
+			local current = pressed
+			if current ~= nil and sameInput(input, current) then
+				pressed = nil
+				binding:Fire(false)
+			end
+		end)
+		return button
+	end
 	button.Activated:Connect(function()
 		binding:Fire(true)
 		task.wait(0.15)
@@ -295,6 +315,14 @@ function TouchControls.new(gui: ScreenGui, scripted: InputSetup.Scripted): Touch
 			size = SMALL_SIZE,
 			binding = scripted.dash,
 		},
+		{
+			name = "Grab",
+			text = "GRAB",
+			color = Color3.fromRGB(235, 110, 200),
+			position = UDim2.fromOffset(sideX, sideY - 2 * (SMALL_SIZE + BUTTON_GAP)),
+			size = SMALL_SIZE,
+			binding = scripted.grab,
+		},
 	}
 	for _, spec in specs do
 		local _, release =
@@ -309,7 +337,7 @@ function TouchControls.new(gui: ScreenGui, scripted: InputSetup.Scripted): Touch
 	training.Position = UDim2.fromOffset(MARGIN, 88)
 	training.BackgroundTransparency = 1
 	training.Parent = root
-	local modeButton = createTapButton(training, "Toggle", "MENU", 1, scripted.toggle)
+	local modeButton = createTapButton(training, "Toggle", "LEAVE", 1, scripted.toggle, true)
 	local nextButton = createTapButton(training, "Next", "DUMMY", 2, scripted.next)
 	local resetButton = createTapButton(training, "Reset", "RESET", 3, scripted.reset)
 	nextButton.Visible = false

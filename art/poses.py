@@ -437,6 +437,244 @@ SLUMP = tweak(
 )
 
 
+# A broken guard: the arms are knocked apart and up, the robot reels back on its heels, then sags, dazed and swaying,
+# until it pulls itself back into its stance.
+GUARD_BREAK_SHOVE = tweak(
+    GUARD,
+    pos=(0, -0.45, 0.4),
+    Pelvis=(6, -10, 0),
+    Chest=(16, -6, 0),
+    Head=(20, 12, 0),
+    UpperArmL=(100, 0, -55),
+    ForearmL=(45, 0, 0),
+    UpperArmR=(96, 0, 52),
+    ForearmR=(48, 0, 0),
+    ThighL=(36, 0, -8),
+    ShinL=(-36, 0, 0),
+    FootL=(-2, 0, 0),
+    ThighR=(-14, 0, 8),
+    ShinR=(-40, 0, 0),
+    FootR=(28, 0, 0),
+)
+GUARD_BREAK_REEL = tweak(
+    GUARD_BREAK_SHOVE,
+    pos=(0, -0.65, 0.85),
+    Pelvis=(10, -8, 0),
+    Chest=(24, -4, 6),
+    Head=(26, 10, 0),
+    UpperArmL=(60, 0, -75),
+    ForearmL=(25, 0, 0),
+    UpperArmR=(55, 0, 72),
+    ForearmR=(28, 0, 0),
+    ThighL=(46, 0, -10),
+    ShinL=(-64, 0, 0),
+    FootL=(18, 0, 0),
+    ThighR=(-24, 0, 10),
+    ShinR=(-34, 0, 0),
+    FootR=(46, 0, 0),
+)
+GUARD_BREAK_DAZE_A = tweak(
+    STANCE,
+    pos=(0, -0.6, 0.55),
+    Pelvis=(2, -6, 0),
+    Chest=(6, -2, -6),
+    Head=(-18, 8, 8),
+    UpperArmL=(14, 0, -26),
+    ForearmL=(30, 0, 0),
+    UpperArmR=(10, 0, 22),
+    ForearmR=(34, 0, 0),
+    ThighL=(30, 0, -10),
+    ShinL=(-54, 0, 0),
+    FootL=(24, 0, 0),
+    ThighR=(18, 0, 10),
+    ShinR=(-48, 0, 0),
+    FootR=(26, 0, 0),
+)
+GUARD_BREAK_DAZE_B = tweak(
+    GUARD_BREAK_DAZE_A,
+    pos=(0.06, -0.62, 0.55),
+    add={"Chest": (2, 0, 12), "Head": (-4, -14, -14), "UpperArmL": (4, 0, -6), "UpperArmR": (-2, 0, 8)},
+)
+
+# The grab: both arms reach out square to the opponent and clamp onto its shoulders; a miss overreaches and stumbles.
+GRAB_REACH = tweak(
+    STANCE,
+    pos=(0, -0.4, -0.15),
+    Pelvis=(0, 0, 0),
+    Chest=(-14, 0, 0),
+    Head=(10, 0, 0),
+    UpperArmL=(70, 0, -18),
+    ForearmL=(58, 0, 0),
+    UpperArmR=(70, 0, 18),
+    ForearmR=(58, 0, 0),
+    ThighL=(40, 0, -6),
+    ShinL=(-46, 0, 0),
+    FootL=(8, 0, 0),
+    ThighR=(-22, 0, 6),
+    ShinR=(-22, 0, 0),
+    FootR=(40, 0, 0),
+)
+GRAB_CLOSE = tweak(
+    GRAB_REACH,
+    pos=(0, -0.42, -0.2),
+    UpperArmL=(72, -18, -6),
+    ForearmL=(78, 0, 0),
+    UpperArmR=(72, 18, 6),
+    ForearmR=(78, 0, 0),
+)
+GRAB_WHIFF = tweak(
+    GRAB_REACH,
+    pos=(0, -0.5, -0.55),
+    Chest=(-28, 0, 0),
+    Head=(18, 0, 0),
+    UpperArmL=(70, -6, -10),
+    ForearmL=(30, 0, 0),
+    UpperArmR=(70, 6, 10),
+    ForearmR=(30, 0, 0),
+    ThighL=(52, 0, -6),
+    ShinL=(-64, 0, 0),
+    FootL=(12, 0, 0),
+    ThighR=(-26, 0, 6),
+    ShinR=(-16, 0, 0),
+    FootR=(42, 0, 0),
+)
+
+# The throw: the robot that caught the other squats under it, heaves it overhead, and drives it down onto the canvas.
+THROW_LIFT = tweak(
+    GRAB_CLOSE,
+    pos=(0, -0.65, -0.15),
+    Pelvis=(0, -2, 0),
+    Chest=(4, -2, 0),
+    Head=(14, 4, 0),
+    UpperArmL=(124, -8, -12),
+    ForearmL=(40, 0, 0),
+    UpperArmR=(124, 8, 12),
+    ForearmR=(40, 0, 0),
+    ThighL=(46, 0, -12),
+    ShinL=(-70, 0, 0),
+    FootL=(24, 0, 0),
+    ThighR=(-4, 0, 12),
+    ShinR=(-50, 0, 0),
+    FootR=(40, 0, 0),
+)
+THROW_HEAVE = tweak(
+    THROW_LIFT,
+    pos=(0, -0.35, 0),
+    Chest=(16, -2, 0),
+    Head=(20, 4, 0),
+    UpperArmL=(158, -6, -10),
+    ForearmL=(28, 0, 0),
+    UpperArmR=(158, 6, 10),
+    ForearmR=(28, 0, 0),
+    ThighL=(30, 0, -10),
+    ShinL=(-40, 0, 0),
+    FootL=(14, 0, 0),
+    ThighR=(-10, 0, 10),
+    ShinR=(-30, 0, 0),
+    FootR=(30, 0, 0),
+)
+THROW_SLAM = tweak(
+    THROW_LIFT,
+    pos=(0, -0.8, -0.35),
+    Pelvis=(-6, -2, 0),
+    Chest=(-34, -2, 0),
+    Head=(-8, 4, 0),
+    UpperArmL=(46, -10, -14),
+    ForearmL=(20, 0, 0),
+    UpperArmR=(46, 10, 14),
+    ForearmR=(20, 0, 0),
+    ThighL=(62, 0, -12),
+    ShinL=(-86, 0, 0),
+    FootL=(24, 0, 0),
+    ThighR=(-6, 0, 12),
+    ShinR=(-60, 0, 0),
+    FootR=(52, 0, 0),
+)
+
+# Being thrown: yanked forward by the shoulders, hoisted off its feet with the legs dangling, slammed onto its back, and
+# back up through a kneel.
+THROWN_CAUGHT = tweak(
+    STANCE,
+    pos=(0, -0.35, -0.15),
+    Pelvis=(0, -6, 0),
+    Chest=(-14, -4, 0),
+    Head=(16, 6, 0),
+    UpperArmL=(70, 0, -30),
+    ForearmL=(70, 0, 0),
+    UpperArmR=(66, 0, 28),
+    ForearmR=(72, 0, 0),
+)
+THROWN_LIFTED = tweak(
+    THROWN_CAUGHT,
+    ground=False,
+    pos=(0, 1.1, -0.35),
+    Pelvis=(-12, 0, 0),
+    Chest=(-6, 0, 4),
+    Head=(10, 0, 0),
+    UpperArmL=(110, 0, -40),
+    ForearmL=(40, 0, 0),
+    UpperArmR=(104, 0, 44),
+    ForearmR=(46, 0, 0),
+    ThighL=(18, 0, -8),
+    ShinL=(-30, 0, 0),
+    FootL=(30, 0, 0),
+    ThighR=(-8, 0, 10),
+    ShinR=(-40, 0, 0),
+    FootR=(36, 0, 0),
+)
+THROWN_SLAMMED = tweak(
+    KO_DOWN,
+    ground="all",
+    pos=(0, -2.3, 1.4),
+    Head=(-14, 0, 0),
+    UpperArmL=(0, 0, -64),
+    UpperArmR=(0, 0, 64),
+    ThighL=(24, 0, -12),
+    ShinL=(-30, 0, 0),
+    ThighR=(14, 0, 14),
+    ShinR=(-40, 0, 0),
+)
+THROWN_DOWN = tweak(KO_SETTLE, ground="all", pos=(0, -2.3, 1.4))
+THROWN_RISE = P(
+    ground="all",
+    pos=(0, -1.3, 0.5),
+    Pelvis=(14, -6, 0),
+    Chest=(-24, -4, 0),
+    Head=(10, 4, 0),
+    UpperArmL=(40, 0, -20),
+    ForearmL=(60, 0, 0),
+    UpperArmR=(20, 0, 24),
+    ForearmR=(40, 0, 0),
+    ThighL=(86, 0, -8),
+    ShinL=(-100, 0, 0),
+    FootL=(14, 0, 0),
+    ThighR=(-6, 0, 8),
+    ShinR=(-110, 0, 0),
+    FootR=(40, 0, 0),
+)
+
+# A throw broken in time: both robots shove each other off with both hands and stumble back into their guard.
+BREAK_SHOVE = tweak(
+    STANCE,
+    pos=(0, -0.4, -0.1),
+    Pelvis=(0, 0, 0),
+    Chest=(-12, 0, 0),
+    Head=(10, 0, 0),
+    UpperArmL=(72, -6, -8),
+    ForearmL=(56, 0, 0),
+    UpperArmR=(72, 6, 8),
+    ForearmR=(56, 0, 0),
+)
+BREAK_RECOIL = tweak(
+    GUARD,
+    pos=(0, -0.5, 0.5),
+    add={"Chest": (12, 0, 0), "Head": (8, 0, 0)},
+    ThighL=(40, 0, -8),
+    ShinL=(-34, 0, 0),
+    FootL=(0, 0, 0),
+)
+
+
 def gait(forward, side, phase):
     """A step cycle toward local direction (forward, side), sampled at phase 0-1. The arms stay in guard."""
     pose = tweak(STANCE)
@@ -497,6 +735,23 @@ def authored():
         "VictoryA": VICTORY_A,
         "VictoryB": VICTORY_B,
         "Slump": SLUMP,
+        "GuardBreakShove": GUARD_BREAK_SHOVE,
+        "GuardBreakReel": GUARD_BREAK_REEL,
+        "GuardBreakDazeA": GUARD_BREAK_DAZE_A,
+        "GuardBreakDazeB": GUARD_BREAK_DAZE_B,
+        "GrabReach": GRAB_REACH,
+        "GrabClose": GRAB_CLOSE,
+        "GrabWhiff": GRAB_WHIFF,
+        "ThrowLift": THROW_LIFT,
+        "ThrowHeave": THROW_HEAVE,
+        "ThrowSlam": THROW_SLAM,
+        "ThrownCaught": THROWN_CAUGHT,
+        "ThrownLifted": THROWN_LIFTED,
+        "ThrownSlammed": THROWN_SLAMMED,
+        "ThrownDown": THROWN_DOWN,
+        "ThrownRise": THROWN_RISE,
+        "BreakShove": BREAK_SHOVE,
+        "BreakRecoil": BREAK_RECOIL,
     }
     for name, forward, side in (("WalkF", 1, 0), ("WalkB", -1, 0), ("WalkL", 0, -1), ("WalkR", 0, 1)):
         for step in range(4):
@@ -608,6 +863,60 @@ CLIPS = {
     "Intro": {"kind": "loop", "period": 1.3, "keys": [(0, "IntroA", "smooth"), (0.5, "IntroB", "smooth")]},
     "Victory": {"kind": "loop", "period": 1.1, "keys": [(0, "VictoryA", "smooth"), (0.5, "VictoryB", "smooth")]},
     "Slump": {"kind": "hold", "keys": [(0, "Slump", "linear")]},
+    # Normalized over the break (FightConfig.Guard.breakFrames).
+    "GuardBreak": {
+        "kind": "norm",
+        "keys": [
+            (0, "GuardBreakShove", "out"),
+            (0.14, "GuardBreakReel", "smooth"),
+            (0.42, "GuardBreakDazeA", "smooth"),
+            (0.6, "GuardBreakDazeB", "smooth"),
+            (0.78, "GuardBreakDazeA", "smooth"),
+            (1, "Stance", "smooth"),
+        ],
+    },
+    # Phased like an attack: the grab's startup, active and recovery (FightConfig.Throw). The recovery only plays on a miss.
+    "Grab": {
+        "kind": "phase",
+        "keys": [
+            (0, "Stance", "in"),
+            (1, "GrabReach", "linear"),
+            (1.5, "GrabClose", "linear"),
+            (2, "GrabClose", "linear"),
+            (2.35, "GrabWhiff", "smooth"),
+            (3, "Stance", "smooth"),
+        ],
+    },
+    # Normalized over the thrower's hold; the slam lands at FightConfig.Throw.slam / hold.
+    "Throw": {
+        "kind": "norm",
+        "keys": [
+            (0, "GrabClose", "out"),
+            (0.2, "ThrowLift", "smooth"),
+            (0.45, "ThrowHeave", "in"),
+            (0.61, "ThrowSlam", "out"),
+            (0.8, "ThrowSlam", "smooth"),
+            (1, "Stance", "smooth"),
+        ],
+    },
+    # Normalized over the time the one thrown is down; it hits the canvas at FightConfig.Throw.slam / down.
+    "Thrown": {
+        "kind": "norm",
+        "keys": [
+            (0, "ThrownCaught", "out"),
+            (0.14, "ThrownLifted", "smooth"),
+            (0.36, "ThrownLifted", "in"),
+            (0.44, "ThrownSlammed", "out"),
+            (0.5, "ThrownDown", "smooth"),
+            (0.7, "ThrownDown", "smooth"),
+            (0.86, "ThrownRise", "smooth"),
+            (1, "Stance", "smooth"),
+        ],
+    },
+    "ThrowBreak": {
+        "kind": "norm",
+        "keys": [(0, "GrabClose", "out"), (0.18, "BreakShove", "out"), (0.5, "BreakRecoil", "smooth"), (1, "Guard", "smooth")],
+    },
     "WalkF": walk_clip("WalkF"),
     "WalkB": walk_clip("WalkB"),
     "WalkL": walk_clip("WalkL"),

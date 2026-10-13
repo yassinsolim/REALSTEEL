@@ -1,8 +1,9 @@
 --!strict
 
--- The fight HUD: two health bars (each with a trailing damage bar and round pips) around a plate that shows the clock,
--- floating damage numbers, the ROUND / FIGHT! / K.O. banners, soft shading top and bottom, a red flush when the local
--- fighter is nearly down, and a card of controls that fades away after a while. It only reads the state it is given.
+-- The fight HUD: two health bars (each with a trailing damage bar, a guard bar under it and round pips) around a plate
+-- that shows the clock, floating damage numbers and callouts (GUARD BROKEN, THROWN, ESCAPED), the ROUND / FIGHT! /
+-- K.O. banners, soft shading top and bottom, a red flush when the local fighter is nearly down, a meter that fills while
+-- the leave key is held, and a card of controls that fades away after a while. It only reads the state it is given.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -39,6 +40,8 @@ export type Hud = {
 	setShown: (shown: boolean) -> (),
 	-- A small readout in the top right corner, for example "42 ms  60 fps", tinted by how healthy the connection is.
 	setStats: (text: string, color: Color3) -> (),
+	-- How far the leave key has been held toward leaving the ring, 0 to 1; 0 hides the meter.
+	setLeaving: (progress: number) -> (),
 }
 
 type Bar = {
@@ -49,6 +52,9 @@ type Bar = {
 	name: TextLabel,
 	hp: TextLabel,
 	pips: { Frame },
+	-- The guard bar under the health bar (see FightConfig.Guard).
+	guardBack: Frame,
+	guardFill: Frame,
 	alignRight: boolean,
 	-- Fraction of full health the trailing bar is showing, and how long it waits before it catches up.
 	lagValue: number,
@@ -56,6 +62,8 @@ type Bar = {
 	lastHp: number,
 	-- The maximum health the bar was last drawn for, so a build with a different maximum does not read as damage.
 	lastMax: number,
+	-- The fighter's state last frame, so a guard break or a throw is called out once.
+	lastState: number,
 }
 
 local Hud = {}
@@ -68,9 +76,10 @@ local HELP_ROWS = {
 	{ "W  S", "sidestep" },
 	{ "LMB  RMB", "punches" },
 	{ "Q  E", "kicks" },
+	{ "LMB+RMB", "grab" },
 	{ "SHIFT", "guard" },
 	{ "SPACE", "dash" },
-	{ "M", "menu" },
+	{ "HOLD P", "leave" },
 }
 
 local EMBLEM_WIDTH = 72
@@ -84,6 +93,11 @@ local ROUND_BANNER_FRAMES = 62
 -- A KO banner shows alone for this long before the sub line appears.
 local SUB_DELAY_FRAMES = 55
 local DANGER_FRACTION = 0.3
+-- The guard bar is this tall, under the outer part of the health bar, and goes amber, then red, as it runs low.
+local GUARD_HEIGHT = 5
+local GUARD_WIDTH = 0.6
+local GUARD_WARN = 0.5
+local GUARD_DANGER = 0.25
 
 -- Bar and name heights for the full layout and the slimmer touch layout, which has less screen to spare.
 local FULL = { bar = 20, name = 16, nameSize = 12, hpSize = 10, vsSize = 16 }
@@ -96,6 +110,8 @@ local AMBER = Color3.fromRGB(255, 200, 90)
 local TEAL = Color3.fromRGB(64, 214, 232)
 local PANEL = Color3.fromRGB(8, 10, 18)
 local WARN = Color3.fromRGB(255, 96, 84)
+local GUARD_COLOR = Color3.fromRGB(150, 225, 255)
+local THROW_COLOR = Color3.fromRGB(255, 150, 230)
 
 local function label(parent: Instance, name: string, font: Enum.Font, size: number): TextLabel
 	local text = Instance.new("TextLabel")
@@ -129,15 +145,38 @@ local function newBar(parent: Instance, name: string, alignRight: boolean, color
 	root.Name = name
 	root.AnchorPoint = Vector2.new(if alignRight then 0 else 1, 0)
 	root.Position = UDim2.new(0.5, (if alignRight then 1 else -1) * (EMBLEM_WIDTH / 2 + GAP), 0, TOP)
-	root.Size = UDim2.fromOffset(300, FULL.bar + FULL.name + 4)
+	root.Size = UDim2.fromOffset(300, FULL.bar + GUARD_HEIGHT + 7 + FULL.name + 4)
 	root.BackgroundTransparency = 1
 	root.Parent = parent
 
 	local nameLabel = label(root, "Name", Enum.Font.Michroma, 12)
 	nameLabel.Size = UDim2.new(1, -70, 0, FULL.name)
-	nameLabel.Position = UDim2.fromOffset(if alignRight then 70 else 0, FULL.bar + 4)
+	nameLabel.Position = UDim2.fromOffset(if alignRight then 70 else 0, FULL.bar + GUARD_HEIGHT + 7)
 	nameLabel.TextXAlignment = if alignRight then Enum.TextXAlignment.Right else Enum.TextXAlignment.Left
 	nameLabel.TextColor3 = color:Lerp(Color3.new(1, 1, 1), 0.35)
+
+	-- The guard bar: a thin gauge under the outer part of the health bar.
+	local guardBack = Instance.new("Frame")
+	guardBack.Name = "Guard"
+	guardBack.AnchorPoint = Vector2.new(if alignRight then 1 else 0, 0)
+	guardBack.Position = UDim2.new(if alignRight then 1 else 0, 0, 0, FULL.bar + 3)
+	guardBack.Size = UDim2.new(GUARD_WIDTH, 0, 0, GUARD_HEIGHT)
+	guardBack.BackgroundColor3 = PANEL
+	guardBack.BackgroundTransparency = 0.15
+	guardBack.BorderSizePixel = 0
+	guardBack.ClipsDescendants = true
+	guardBack.Parent = root
+	round(guardBack, 2)
+	stroke(guardBack, GUARD_COLOR, 1, 0.6)
+	local guardFill = Instance.new("Frame")
+	guardFill.Name = "Fill"
+	guardFill.AnchorPoint = Vector2.new(if alignRight then 1 else 0, 0)
+	guardFill.Position = UDim2.fromScale(if alignRight then 1 else 0, 0)
+	guardFill.Size = UDim2.fromScale(1, 1)
+	guardFill.BackgroundColor3 = GUARD_COLOR
+	guardFill.BorderSizePixel = 0
+	guardFill.Parent = guardBack
+	round(guardFill, 2)
 
 	local back = Instance.new("Frame")
 	back.Name = "Back"
@@ -233,12 +272,38 @@ local function newBar(parent: Instance, name: string, alignRight: boolean, color
 		name = nameLabel,
 		hp = hpLabel,
 		pips = pips,
+		guardBack = guardBack,
+		guardFill = guardFill,
 		alignRight = alignRight,
 		lagValue = 1,
 		lagHold = 0,
 		lastHp = FightConfig.MaxHp,
 		lastMax = FightConfig.MaxHp,
+		lastState = FightSim.State.Idle,
 	}
+end
+
+-- A word that pops in under the bar, holds a moment and fades: GUARD BROKEN, THROWN, ESCAPED.
+local function callout(bar: Bar, text: string, color: Color3)
+	local word = label(bar.root, "Callout", Enum.Font.GothamBlack, 22)
+	word.Size = UDim2.fromOffset(220, 26)
+	word.AnchorPoint = Vector2.new(if bar.alignRight then 1 else 0, 0)
+	word.Position = UDim2.new(if bar.alignRight then 1 else 0, 0, 0, bar.root.AbsoluteSize.Y + 28)
+	word.Text = text
+	word.TextColor3 = color
+	word.TextXAlignment = if bar.alignRight then Enum.TextXAlignment.Right else Enum.TextXAlignment.Left
+	word.TextStrokeTransparency = 0.25
+	local scale = Instance.new("UIScale")
+	scale.Scale = 1.6
+	scale.Parent = word
+	TweenService:Create(scale, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 })
+		:Play()
+	task.delay(0.9, function()
+		TweenService:Create(word, TweenInfo.new(0.5), { TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
+	end)
+	task.delay(1.5, function()
+		word:Destroy()
+	end)
 end
 
 -- A damage number that pops in under the end of the bar, drifts down and fades.
@@ -300,6 +365,30 @@ local function updateBar(bar: Bar, fighter: FightSim.Fighter, dt: number, name: 
 	for index, pip in bar.pips do
 		pip.Visible = showPips
 		pip.BackgroundColor3 = if index <= wins then AMBER else Color3.fromRGB(26, 30, 46)
+	end
+
+	-- The guard bar, and a word when the guard breaks or a throw lands or is broken.
+	local State = FightSim.State
+	local guardFraction = math.clamp(fighter.guard / FightConfig.Guard.max, 0, 1)
+	local broken = fighter.state == State.GuardBreak
+	local pulse = 0.5 + 0.5 * math.sin(os.clock() * 14)
+	bar.guardFill.Size = UDim2.fromScale(guardFraction, 1)
+	bar.guardFill.BackgroundColor3 = if guardFraction <= GUARD_DANGER
+		then WARN
+		elseif guardFraction <= GUARD_WARN then AMBER
+		else GUARD_COLOR
+	bar.guardFill.BackgroundTransparency = if guardFraction <= GUARD_DANGER then 0.35 * pulse else 0
+	bar.guardBack.BackgroundColor3 = if broken then WARN:Lerp(PANEL, pulse) else PANEL
+	local state = fighter.state
+	if state ~= bar.lastState then
+		if state == State.GuardBreak then
+			callout(bar, "GUARD BROKEN", WARN)
+		elseif state == State.Thrown then
+			callout(bar, "THROWN", THROW_COLOR)
+		elseif state == State.ThrowBreak and bar.lastState == State.Thrown then
+			callout(bar, "ESCAPED", GUARD_COLOR)
+		end
+		bar.lastState = state
 	end
 end
 
@@ -447,6 +536,33 @@ function Hud.new(): Hud
 	stats.TextTransparency = 0.25
 	stats.TextStrokeTransparency = 0.6
 
+	-- Holding the leave key fills this up; letting go before it is full keeps the player in the ring.
+	local leaving = Instance.new("Frame")
+	leaving.Name = "Leaving"
+	leaving.AnchorPoint = Vector2.new(0.5, 1)
+	leaving.Position = UDim2.new(0.5, 0, 1, -96)
+	leaving.Size = UDim2.fromOffset(220, 34)
+	leaving.BackgroundColor3 = PANEL
+	leaving.BackgroundTransparency = 0.15
+	leaving.BorderSizePixel = 0
+	leaving.Visible = false
+	leaving.Parent = root
+	round(leaving, 8)
+	stroke(leaving, AMBER, 1.5, 0.35)
+	local leavingFill = Instance.new("Frame")
+	leavingFill.Name = "Fill"
+	leavingFill.Size = UDim2.fromScale(0, 1)
+	leavingFill.BackgroundColor3 = AMBER
+	leavingFill.BackgroundTransparency = 0.55
+	leavingFill.BorderSizePixel = 0
+	leavingFill.Parent = leaving
+	round(leavingFill, 8)
+	local leavingText = label(leaving, "Text", Enum.Font.GothamBlack, 14)
+	leavingText.Size = UDim2.fromScale(1, 1)
+	leavingText.Text = "LEAVING..."
+	leavingText.TextColor3 = Color3.new(1, 1, 1)
+	leavingText.ZIndex = 2
+
 	local help = newHelpCard(root)
 	local helpPinned = false
 	local helpShown = true
@@ -480,11 +596,13 @@ function Hud.new(): Hud
 			- EMBLEM_WIDTH / 2
 			- GAP
 		local height = metrics.bar + metrics.name + 4
+		local nameTop = metrics.bar + GUARD_HEIGHT + 7
 		for _, bar in { barA, barB } do
-			bar.root.Size = UDim2.fromOffset(width, height)
+			bar.root.Size = UDim2.fromOffset(width, nameTop + metrics.name + 4)
 			bar.back.Size = UDim2.new(1, 0, 0, metrics.bar)
+			bar.guardBack.Position = UDim2.new(if bar.alignRight then 1 else 0, 0, 0, metrics.bar + 3)
 			bar.name.Size = UDim2.new(1, -70, 0, metrics.name)
-			bar.name.Position = UDim2.fromOffset(if bar.alignRight then 70 else 0, metrics.bar + 4)
+			bar.name.Position = UDim2.fromOffset(if bar.alignRight then 70 else 0, nameTop)
 			bar.name.TextSize = metrics.nameSize
 			bar.hp.TextSize = metrics.hpSize
 		end
@@ -630,6 +748,10 @@ function Hud.new(): Hud
 		setStats = function(text: string, color: Color3)
 			stats.Text = text
 			stats.TextColor3 = color
+		end,
+		setLeaving = function(progress: number)
+			leaving.Visible = progress > 0
+			leavingFill.Size = UDim2.fromScale(math.clamp(progress, 0, 1), 1)
 		end,
 	}
 end

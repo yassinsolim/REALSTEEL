@@ -18,6 +18,7 @@ local Sfx = require(script.Parent:WaitForChild("Sfx"))
 type Snapshot = {
 	hitstop: number,
 	state: number,
+	hp: number,
 }
 
 export type Effects = {
@@ -26,6 +27,9 @@ export type Effects = {
 	previous: { [number]: Snapshot },
 	lastImpact: { [number]: number },
 	lastSwing: { [number]: number },
+	-- When each fighter last had a guard break, a catch, a slam or a broken throw, so a rollback replaying one does not
+	-- set it off twice.
+	lastSpecial: { [number]: number },
 	-- One trail per striking limb, per fighter slot.
 	trails: { [number]: { [string]: Trail } },
 	-- Camera shake in studs, decaying every frame.
@@ -58,6 +62,9 @@ local SWING_PITCH = { 1.3, 1.05, 1.15, 0.85 }
 local HIT_COLOR = Color3.fromRGB(255, 190, 80)
 local BLOCK_COLOR = Color3.fromRGB(130, 200, 255)
 local KO_COLOR = Color3.fromRGB(255, 120, 60)
+local BREAK_COLOR = Color3.fromRGB(170, 235, 255)
+local THROW_COLOR = Color3.fromRGB(255, 150, 230)
+local SPECIAL_COOLDOWN = 0.3
 
 function Effects.new(sfx: Sfx.Sfx): Effects
 	local folder = Instance.new("Folder")
@@ -69,6 +76,7 @@ function Effects.new(sfx: Sfx.Sfx): Effects
 		previous = {},
 		lastImpact = {},
 		lastSwing = {},
+		lastSpecial = {},
 		trails = {},
 		shake = 0,
 		flash = 0,
@@ -342,6 +350,61 @@ local function onImpact(
 	end
 end
 
+-- The moments a guard or a throw makes: a guard shattering, a grab catching, a thrown robot hitting the canvas, and two
+-- robots shoving out of a throw.
+local function onSpecial(
+	self: Effects,
+	kind: string,
+	fighter: FightSim.Fighter,
+	other: FightSim.Fighter,
+	view: FighterView.View,
+	otherView: FighterView.View
+)
+	local offset = Vector3.new(fighter.x - other.x, 0, fighter.z - other.z)
+	local away = if offset.Magnitude > 1e-3 then offset.Unit else Vector3.xAxis
+	local now = os.clock()
+	if kind == "break" then
+		-- The guard shatters: a burst of pale sparks off the chest, a hard flash and a clang that rings out.
+		impact(self, FighterView.chestPoint(view), -away, BREAK_COLOR, 1.9, 40)
+		self.shake = math.max(self.shake, 0.4)
+		self.flash = math.max(self.flash, 0.45)
+		self.punch = math.max(self.punch, 0.8)
+		self.excitement = math.min(self.excitement + 0.45, 1)
+		Sfx.play(self.sfx, "clank", 1.2, 0.62)
+		Sfx.play(self.sfx, "boom", 0.55, 1.5)
+		if self.cheers then
+			Sfx.surge(self.sfx, now, 0.8)
+		end
+	elseif kind == "catch" then
+		local middle = (FighterView.chestPoint(view) + FighterView.chestPoint(otherView)) / 2
+		impact(self, middle, -away, THROW_COLOR, 0.8, 10)
+		self.shake = math.max(self.shake, 0.08)
+		self.punch = math.max(self.punch, 0.3)
+		Sfx.play(self.sfx, "clank", 0.9, 1.35)
+	elseif kind == "slam" then
+		local ground = FighterView.groundPoint(view)
+		impact(self, ground + Vector3.new(0, 0.6, 0), Vector3.yAxis, THROW_COLOR, 2, 36)
+		dust(self, ground)
+		dust(self, ground + away * 1.5)
+		self.shake = math.max(self.shake, 0.5)
+		self.flash = math.max(self.flash, 0.25)
+		self.punch = math.max(self.punch, 0.8)
+		self.excitement = math.min(self.excitement + 0.5, 1)
+		Sfx.play(self.sfx, "heavy", 1.1, 0.75)
+		Sfx.play(self.sfx, "boom", 0.8, 1.1)
+		if self.cheers then
+			Sfx.surge(self.sfx, now, 0.9)
+		end
+	elseif kind == "escape" then
+		local middle = (FighterView.chestPoint(view) + FighterView.chestPoint(otherView)) / 2
+		impact(self, middle, Vector3.yAxis, Color3.new(1, 1, 1), 1.1, 16)
+		self.shake = math.max(self.shake, 0.12)
+		self.punch = math.max(self.punch, 0.25)
+		Sfx.play(self.sfx, "clank", 1, 1.5)
+		Sfx.play(self.sfx, "whoosh", 0.5, 1.2)
+	end
+end
+
 -- Call once per render frame, after both fighters' views are updated. Returns the camera shake amplitude in studs.
 function Effects.update(
 	self: Effects,
@@ -370,6 +433,25 @@ function Effects.update(
 				dust(self, FighterView.groundPoint(views[slot]))
 				Sfx.play(self.sfx, "whoosh", 0.6, 0.8)
 			end
+			-- A broken guard, a catch, a slam and an escape. Two robots shoving out of a throw make one effect.
+			local special: string? = nil
+			if fighter.state == FightSim.State.GuardBreak and previous.state ~= FightSim.State.GuardBreak then
+				special = "break"
+			elseif fighter.state == FightSim.State.Thrown and previous.state ~= FightSim.State.Thrown then
+				special = "catch"
+			elseif fighter.state == FightSim.State.Thrown and fighter.hp < previous.hp then
+				special = "slam"
+			elseif
+				slot == 1
+				and fighter.state == FightSim.State.ThrowBreak
+				and previous.state ~= FightSim.State.ThrowBreak
+			then
+				special = "escape"
+			end
+			if special ~= nil and now - (self.lastSpecial[slot] or -1) > SPECIAL_COOLDOWN then
+				self.lastSpecial[slot] = now
+				onSpecial(self, special, fighter, fighters[other], views[slot], views[other])
+			end
 			-- A swing starts: the whoosh is timed so its swell peaks as the strike lands.
 			local move = fighter.stats.moves[fighter.moveId]
 			if
@@ -388,7 +470,7 @@ function Effects.update(
 				)
 			end
 		end
-		self.previous[slot] = { hitstop = fighter.hitstop, state = fighter.state }
+		self.previous[slot] = { hitstop = fighter.hitstop, state = fighter.state, hp = fighter.hp }
 
 		-- A trail follows the striking limb from just before the hit to just after it.
 		local wanted: string? = nil

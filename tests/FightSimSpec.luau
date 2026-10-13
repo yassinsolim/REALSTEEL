@@ -8,6 +8,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local FightConfig = require(ReplicatedStorage.Shared.FightConfig)
 local FightSim = require(ReplicatedStorage.Shared.FightSim)
 local FrameData = require(ReplicatedStorage.Shared.FrameData)
+local Loadout = require(ReplicatedStorage.Shared.Loadout)
 
 local State = FightSim.State
 local jab = FightConfig.Moves[FightConfig.JabMoveId]
@@ -25,6 +26,7 @@ type InputSpec = {
 	rightKick: boolean?,
 	guard: boolean?,
 	dash: boolean?,
+	grab: boolean?,
 }
 
 local function input(spec: InputSpec?): FightSim.Input
@@ -38,6 +40,7 @@ local function input(spec: InputSpec?): FightSim.Input
 		rightKick = given.rightKick or false,
 		guard = given.guard or false,
 		dash = given.dash or false,
+		grab = given.grab or false,
 	}
 end
 
@@ -84,6 +87,11 @@ local function sameFighter(a: FightSim.Fighter, b: FightSim.Fighter): boolean
 		and a.dashFwd == b.dashFwd
 		and a.dashSide == b.dashSide
 		and a.healDelay == b.healDelay
+		and a.guard == b.guard
+		and a.guardDelay == b.guardDelay
+		and a.jabAge == b.jabAge
+		and a.straightAge == b.straightAge
+		and a.prevGrab == b.prevGrab
 end
 
 -- Plays an exchange where A attacks with the given button and B reacts, recording history to measure the advantage.
@@ -595,6 +603,7 @@ return function(): (number, { string })
 		check("dummy mode 3 throws straights", observe(3)[100 + FightConfig.StraightMoveId] == true)
 		check("dummy mode 5 throws snap kicks", observe(5)[100 + FightConfig.SnapKickMoveId] == true)
 		check("dummy mode 6 throws power kicks", observe(6)[100 + FightConfig.PowerKickMoveId] == true)
+		check("dummy mode 7 grabs", observe(7)[State.Grab] == true)
 		local mixed = observe(4)
 		check(
 			"dummy mode 4 mixes guard, every attack and dash",
@@ -604,6 +613,247 @@ return function(): (number, { string })
 				and mixed[100 + FightConfig.SnapKickMoveId] == true
 				and mixed[100 + FightConfig.PowerKickMoveId] == true
 				and mixed[State.Dash] == true
+		)
+	end
+
+	-- The guard bar: holding the guard and blocking drain it, it refills once the guard comes down, and an empty bar
+	-- breaks the guard wide open.
+	do
+		local guard = FightConfig.Guard
+		local guarding = input({ guard = true })
+
+		local a, b = pair(-6, 6)
+		stepMany(a, b, 60, nil, guarding)
+		check("holding the guard drains the bar", b.guard == guard.max - 60 * guard.holdDrain, b.guard)
+		stepMany(a, b, guard.regenDelay)
+		check("the bar waits before it refills", b.guard == guard.max - 60 * guard.holdDrain, b.guard)
+		stepMany(a, b, 3)
+		check("then it refills", b.guard == guard.max - 60 * guard.holdDrain + 3 * guard.regen, b.guard)
+		stepMany(a, b, 200)
+		check("but never past full", b.guard == guard.max, b.guard)
+
+		local c, d = pair(0, 3)
+		FightSim.step(c, d, input({ jab = true }), guarding)
+		stepMany(c, d, jab.startup + 1, nil, guarding)
+		check(
+			"a blocked move takes its guard damage",
+			d.state == State.Blockstun and d.guard == guard.max - (jab.startup + 2) * guard.holdDrain - jab.guard,
+			d.guard
+		)
+
+		local e, f = pair(0, 3)
+		f.guard = straight.guard - 1
+		FightSim.step(e, f, input({ straight = true }), guarding)
+		stepMany(e, f, straight.startup + 1, nil, guarding)
+		check(
+			"blocking with too little left breaks the guard",
+			f.state == State.GuardBreak and f.guard == 0 and f.stun == guard.breakFrames,
+			f.state
+		)
+		check("the break takes only chip damage", f.hp == FightConfig.MaxHp - straight.chip, f.hp)
+		check("and freezes the moment longer", f.hitstop == straight.hitstop + guard.breakHitstop, f.hitstop)
+		-- The straight that broke it is followed by the slowest attack there is, which still lands.
+		local landed = false
+		for frame = 1, 90 do
+			FightSim.step(e, f, input({ rightKick = frame % 2 == 1 }), guarding)
+			if f.state == State.Hitstun or f.state == State.KO then
+				landed = true
+				break
+			end
+		end
+		check("a broken guard is open to a power kick", landed and f.hp < FightConfig.MaxHp - straight.chip, f.state)
+		check("a hit during the break restarts the bar at the refill", f.guard == guard.refill, f.guard)
+
+		local g, h = pair(-6, 6)
+		h.guard = 3 * guard.holdDrain
+		stepMany(g, h, 3, nil, guarding)
+		check("holding the guard until the bar is empty breaks it", h.state == State.GuardBreak, h.state)
+		stepMany(g, h, guard.breakFrames - 1, nil, guarding)
+		check("a break lasts its frames", h.state == State.GuardBreak, h.state)
+		FightSim.step(g, h, neutral, neutral)
+		check("and ends with the bar at the refill", h.state == State.Idle and h.guard == guard.refill, h.guard)
+
+		local bulwark = FightSim.newFighter(6, 0)
+		bulwark.stats = Loadout.stats(Loadout.encode({ chassis = 2, arms = 1, core = 1, legs = 1 }))
+		local other = FightSim.newFighter(-6, 0)
+		stepMany(other, bulwark, 60, nil, guarding)
+		check(
+			"BULWARK's guard drains slower",
+			bulwark.guard == guard.max - 60 * guard.holdDrain * bulwark.stats.guardTaken
+				and bulwark.stats.guardTaken < 1,
+			bulwark.guard
+		)
+	end
+
+	-- Throws: both punches grab, a grab beats a guard and loses to any attack, and grabbing back in time breaks free.
+	do
+		local throw = FightConfig.Throw
+		local both = input({ jab = true, straight = true })
+		local guarding = input({ guard = true })
+
+		local a, b = pair(-6, 6)
+		FightSim.step(a, b, both, neutral)
+		check("both punches together grab", a.state == State.Grab, a.state)
+		local c, d = pair(-6, 6)
+		FightSim.step(c, d, input({ jab = true }), neutral)
+		FightSim.step(c, d, input({ jab = true }), neutral)
+		FightSim.step(c, d, input({ jab = true, straight = true }), neutral)
+		check("the second punch two frames later turns the jab into a grab", c.state == State.Grab, c.state)
+		local e, f = pair(-6, 6)
+		FightSim.step(e, f, input({ jab = true }), neutral)
+		stepMany(e, f, 2, input({ jab = true }), neutral)
+		FightSim.step(e, f, input({ jab = true, straight = true }), neutral)
+		check(
+			"three frames later it is a jab and a straight",
+			e.state == State.Attack and e.moveId == FightConfig.JabMoveId and e.action == FightSim.Action.Straight,
+			e.state
+		)
+		local g, h = pair(-6, 6)
+		FightSim.step(g, h, input({ grab = true }), neutral)
+		check("the grab button grabs", g.state == State.Grab, g.state)
+
+		-- A guard is no defence.
+		local p, q = pair(0, 2.6)
+		FightSim.step(p, q, both, guarding)
+		local caughtAt = nil
+		for frame = 1, throw.startup + throw.active + 2 do
+			FightSim.step(p, q, neutral, guarding)
+			if caughtAt == nil and q.state == State.Thrown then
+				caughtAt = frame
+			end
+		end
+		check("a grab catches a guarding opponent", caughtAt == throw.startup + 1 and p.state == State.Throw, caughtAt)
+		check("the catch does no damage yet", q.hp == FightConfig.MaxHp, q.hp)
+		local throwerFree, thrownFree = nil, nil
+		for frame = 1, 120 do
+			FightSim.step(p, q, neutral, neutral)
+			if throwerFree == nil and p.state == State.Idle then
+				throwerFree = frame
+			end
+			if thrownFree == nil and q.state == State.Idle then
+				thrownFree = frame
+			end
+		end
+		check("the slam deals the throw's damage", q.hp == FightConfig.MaxHp - throw.damage, q.hp)
+		check(
+			"the thrower is up first",
+			throwerFree ~= nil and thrownFree ~= nil and thrownFree - throwerFree == throw.down - throw.hold,
+			`{throwerFree} {thrownFree}`
+		)
+		check("the one thrown lands farther away", q.x - p.x > 2.6 + 0.5, q.x - p.x)
+
+		local r, s = pair(0, 4.5)
+		FightSim.step(r, s, both, guarding)
+		local whiffEnd = nil
+		for frame = 1, 60 do
+			FightSim.step(r, s, neutral, guarding)
+			if whiffEnd == nil and r.state == State.Idle then
+				whiffEnd = frame
+			end
+		end
+		check(
+			"out of range the grab whiffs for its whole length",
+			s.state == State.Guard and whiffEnd == throw.startup + throw.active + throw.recovery + 1,
+			whiffEnd
+		)
+
+		-- Grabbing back in time breaks free; too late does nothing.
+		local function thrownWith(breakAt: number): (FightSim.Fighter, FightSim.Fighter)
+			local x, y = pair(0, 2.6)
+			FightSim.step(x, y, both, neutral)
+			while y.state ~= State.Thrown do
+				FightSim.step(x, y, neutral, neutral)
+			end
+			local frames = 0
+			while x.state == State.Throw and frames < 200 do
+				frames += 1
+				local press = y.stateFrame + 1 == breakAt and y.hitstop == 0
+				FightSim.step(x, y, neutral, if press then both else neutral)
+			end
+			return x, y
+		end
+		local x1, y1 = thrownWith(throw.breakWindow)
+		check(
+			"grabbing back in time breaks free",
+			x1.state == State.ThrowBreak and y1.state == State.ThrowBreak and y1.hp == FightConfig.MaxHp,
+			`{x1.state} {y1.state}`
+		)
+		check("a broken throw shoves both apart", y1.vx > 0 and x1.vx < 0)
+		local _, y2 = thrownWith(throw.breakWindow + 1)
+		check("grabbing back too late does nothing", y2.hp == FightConfig.MaxHp - throw.damage, y2.hp)
+
+		-- Any attack beats a grab: a strike on its way cannot be caught, and the grab's whiff is punished.
+		local t, u = pair(0, 2.6)
+		FightSim.step(t, u, both, input({ jab = true }))
+		stepMany(t, u, jab.startup + 1)
+		check("a jab beats a grab started with it", t.state == State.Hitstun and u.state ~= State.Thrown, t.state)
+		local v, w = pair(0, 2.6)
+		FightSim.step(v, w, both, input({ rightKick = true }))
+		stepMany(v, w, powerKick.startup + 1)
+		check(
+			"even a power kick beats a grab, since it cannot be caught on its way",
+			v.state == State.Hitstun and w.hp == FightConfig.MaxHp,
+			v.state
+		)
+
+		-- An attack that is over can be caught, a stun cannot.
+		local function grabbedWhile(setup: (FightSim.Fighter) -> ()): boolean
+			local m, n = pair(0, 2.6)
+			m.state = State.Grab
+			m.stateFrame = throw.startup
+			m.aimX = 1
+			setup(n)
+			FightSim.step(m, n, neutral, neutral)
+			return n.state == State.Thrown
+		end
+		check(
+			"a fighter finishing an attack can be caught",
+			grabbedWhile(function(n)
+				n.state = State.Attack
+				n.moveId = FightConfig.JabMoveId
+				n.stateFrame = jab.startup + jab.active + 1
+			end)
+		)
+		check("a fighter in hitstun cannot", not grabbedWhile(function(n)
+			n.state = State.Hitstun
+			n.stun = 20
+		end))
+		check("nor one in blockstun", not grabbedWhile(function(n)
+			n.state = State.Blockstun
+			n.stun = 20
+		end))
+		check("a grab only catches in front", not grabbedWhile(function(n)
+			n.x = -2.6
+		end))
+
+		local i, j = pair(0, 2.6)
+		FightSim.step(i, j, both, both)
+		stepMany(i, j, throw.startup + 1)
+		check(
+			"two grabs that catch each other break apart",
+			i.state == State.ThrowBreak and j.state == State.ThrowBreak,
+			`{i.state} {j.state}`
+		)
+
+		local k, l = pair(0, 2.6)
+		l.hp = 5
+		l.healDelay = FightConfig.TrainingHealDelay
+		FightSim.step(k, l, both, neutral, { training = true })
+		stepMany(k, l, 90, nil, nil, { training = true })
+		check("a throw in training never knocks out", l.hp == 1 and l.state ~= State.KO, l.hp)
+		local o, z = pair(0, 2.6)
+		z.hp = 5
+		FightSim.step(o, z, both, neutral, { training = false, rounds = true })
+		stepMany(o, z, 60, nil, nil, { training = false, rounds = true })
+		check("a throw can knock out", z.state == State.KO and z.hp == 0, z.state)
+
+		check(
+			"a grab's frames read as startup, active and recovery",
+			FrameData.cellKind(State.Grab, 0, throw.startup) == "startup"
+				and FrameData.cellKind(State.Grab, 0, throw.startup + 1) == "active"
+				and FrameData.cellKind(State.Grab, 0, throw.startup + throw.active + 1) == "recovery"
+				and FrameData.cellKind(State.GuardBreak, 0, 0) == "broken"
+				and FrameData.cellKind(State.Thrown, 0, 0) == "throw"
 		)
 	end
 
@@ -652,11 +902,12 @@ return function(): (number, { string })
 						rightKick = frame % 59 == 0,
 						guard = frame % 100 < 20,
 						dash = frame % 83 == 0,
+						grab = frame % 89 == 0,
 					}),
 					input({
 						moveX = strafe,
-						jab = frame % 53 == 0,
-						straight = frame % 97 == 0,
+						jab = frame % 53 == 0 or frame % 101 == 0,
+						straight = frame % 97 == 0 or frame % 101 == 1,
 						leftKick = frame % 47 == 0,
 						rightKick = frame % 67 == 0,
 						guard = frame % 130 < 30,

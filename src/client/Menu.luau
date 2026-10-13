@@ -420,7 +420,7 @@ function Menu.new(gui: ScreenGui, send: (action: string, level: number?) -> (), 
 	shade.Selectable = false
 	shade.Parent = root
 
-	-- Asked for by the PLAY button, M, or a pad; every choice closes it again.
+	-- Asked for by the PLAY button or P; every choice closes it again.
 	local wantMain = false
 	local wantSection: string? = nil
 	local function closeMain()
@@ -451,8 +451,15 @@ function Menu.new(gui: ScreenGui, send: (action: string, level: number?) -> (), 
 	local modeRow = addRow(main, 7)
 	local trainingEntry =
 		addTile(main, modeRow, 1, "TRAINING", "A dummy to hit, with frame data.", TEAL, pick("training", nil))
-	local versusEntry =
-		addTile(main, modeRow, 2, "1V1", "Fight the next player who joins the line.", VERSUS_COLOR, pick("versus", nil))
+	local versusEntry = addTile(
+		main,
+		modeRow,
+		2,
+		"1V1",
+		"The next player in line. Or meet on the 1V1 pads.",
+		VERSUS_COLOR,
+		pick("versus", nil)
+	)
 	local caption = label(main.frame, "", Enum.Font.GothamMedium, 12, MUTED)
 	caption.LayoutOrder = 8
 	main.caption = caption
@@ -465,7 +472,7 @@ function Menu.new(gui: ScreenGui, send: (action: string, level: number?) -> (), 
 	leaveEntry.button.Visible = false
 	local hint = label(
 		main.frame,
-		"Arrows or W S to choose, Enter to pick. G opens the garage; M or Esc closes this.",
+		"Arrows or W S to choose, Enter to pick. G opens the garage; P or Esc closes this.",
 		Enum.Font.GothamMedium,
 		11,
 		MUTED

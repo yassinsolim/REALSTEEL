@@ -48,6 +48,7 @@ local SMOOTH_TIME = 0.09
 local DEFAULT_ACCENT = Color3.fromRGB(70, 140, 255)
 local HIT_FLASH = Color3.new(1, 1, 1)
 local BLOCK_FLASH = Color3.fromRGB(150, 205, 255)
+local BREAK_FLASH = Color3.fromRGB(255, 110, 90)
 local FLASH_FRAMES = 6
 
 -- `origin` is the middle of the fighter's ring in the hall (the main ring's is the hall's origin).
@@ -244,6 +245,8 @@ function FighterView.update(
 		flash = HIT_FLASH
 	elseif state == FightSim.State.Blockstun and fighter.stateFrame < FLASH_FRAMES then
 		flash = BLOCK_FLASH
+	elseif state == FightSim.State.GuardBreak and fighter.stateFrame < FLASH_FRAMES * 2 then
+		flash = BREAK_FLASH
 	end
 	RobotRig.setFlash(view.robot, flash)
 

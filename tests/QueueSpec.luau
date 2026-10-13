@@ -331,5 +331,87 @@ return function(): (number, { string })
 		)
 	end
 
+	-- Two players who ask for a 1v1 together (the 1V1 pads) fight each other, whoever else is waiting.
+	do
+		local queue = RingQueue.new(ONE)
+		RingQueue.join(queue, A, "versus", 0, 1)
+		check("a pair can be put in line", RingQueue.joinPair(queue, B, C, 2))
+		check("asking again changes nothing", not RingQueue.joinPair(queue, B, C, 3))
+		check("nobody pairs with themselves", not RingQueue.joinPair(queue, D, D, 3))
+		check("a pair member is not alone", not RingQueue.alone(queue, B) and not RingQueue.alone(queue, C))
+		local pair = RingQueue.start(queue, 4)[1]
+		check("a pair fights each other, the first seat first", ids(pair) == "versus:202,303", ids(pair))
+		check("and leaves the single ahead of it waiting alone", RingQueue.alone(queue, A))
+		check("someone in a ring cannot pair up", not RingQueue.joinPair(queue, B, D, 5))
+		RingQueue.finish(queue, 1)
+		RingQueue.join(queue, D, "versus", 0, 6)
+		check("two singles are not alone", not RingQueue.alone(queue, A) and not RingQueue.alone(queue, D))
+		check("someone not waiting for a 1v1 is never alone", not RingQueue.alone(queue, E))
+		local singles = RingQueue.start(queue, 7)[1]
+		check("singles still pair up by themselves", ids(singles) == "versus:101,404", ids(singles))
+	end
+
+	do
+		-- A pair goes once the later of the two is in line, ahead of singles who have nobody until after it.
+		local queue = RingQueue.new(ONE)
+		RingQueue.join(queue, A, "versus", 0, 1)
+		RingQueue.joinPair(queue, B, C, 2)
+		RingQueue.join(queue, D, "versus", 0, 3)
+		check("a pair ahead of a 1v1 between singles", ids(RingQueue.start(queue, 4)[1]) == "versus:202,303")
+		RingQueue.finish(queue, 1)
+		check("then the singles", ids(RingQueue.start(queue, 5)[1]) == "versus:101,404")
+	end
+
+	do
+		-- Leaving a pair, or asking for something else, leaves the other one waiting for anyone.
+		local queue = RingQueue.new(ONE)
+		RingQueue.joinPair(queue, A, B, 1)
+		RingQueue.leave(queue, B)
+		local entry = RingQueue.find(queue, A)
+		check(
+			"a partner leaving leaves the other waiting alone",
+			entry ~= nil and entry.partner == nil and RingQueue.alone(queue, A)
+		)
+		RingQueue.joinPair(queue, A, C, 2)
+		RingQueue.join(queue, C, "bot", 2, 3)
+		local left = RingQueue.find(queue, A)
+		check("asking for a bot leaves a pair", left ~= nil and left.partner == nil and RingQueue.alone(queue, A))
+		RingQueue.join(queue, B, "training", 0, 4)
+		RingQueue.joinPair(queue, B, D, 5)
+		check("pairing up takes the place in line of whatever was asked before", ahead(queue, B) == 1, ahead(queue, B))
+		local first = RingQueue.start(queue, 6)[1]
+		check("and goes before the bot player who asked earlier", ids(first) == "versus:202,404", ids(first))
+	end
+
+	do
+		-- A pair already in line that steps onto the other pads keeps its place, in the new seats.
+		local queue = RingQueue.new(ONE)
+		RingQueue.join(queue, E, "training", 0, 0)
+		RingQueue.start(queue, 0)
+		RingQueue.joinPair(queue, A, B, 1)
+		RingQueue.joinPair(queue, C, D, 2)
+		check("swapping pads swaps the seats", RingQueue.joinPair(queue, B, A, 3))
+		check("asking for the same seats again changes nothing", not RingQueue.joinPair(queue, B, A, 4))
+		RingQueue.finish(queue, 1)
+		local upNext = RingQueue.start(queue, 5)[1]
+		check("and keeps the pair's place in line", ids(upNext) == "versus:202,101", ids(upNext))
+	end
+
+	do
+		-- In the hall every ring hosts 1v1s: a pair takes the main ring, the next one a pit, and practice the rest.
+		local ALL: { RingQueue.Rule } = {
+			{ versus = true, solo = true, rank = 2 },
+			{ versus = true, solo = true, rank = 1 },
+			{ versus = true, solo = true, rank = 1 },
+		}
+		local queue = RingQueue.new(ALL)
+		RingQueue.joinPair(queue, A, B, 1)
+		check("a pair takes the main ring", started(RingQueue.start(queue, 2)) == "1=versus:101,202")
+		RingQueue.joinPair(queue, C, D, 3)
+		check("the next pair takes a pit", started(RingQueue.start(queue, 4)) == "2=versus:303,404")
+		RingQueue.join(queue, E, "bot", 1, 5)
+		check("and practice the pit left", started(RingQueue.start(queue, 6)) == "3=bot:505")
+	end
+
 	return passed, failures
 end

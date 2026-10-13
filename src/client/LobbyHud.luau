@@ -1,6 +1,6 @@
 --!strict
 
--- Client: what the player sees while walking around the hall. A PLAY button (M or Select also open the PLAY card), a chip
+-- Client: what the player sees while walking around the hall. A PLAY button (P or Select also open the PLAY card), a chip
 -- that says where they stand in line for a fight with a LEAVE button, and short notices such as "PIT 1 IS YOURS". It
 -- only reads what it is given; the server keeps the line (see Rings).
 
@@ -13,11 +13,15 @@ export type Info = {
 	-- Hidden while the player is in a ring, or while the PLAY card or the garage is up.
 	hidden: boolean,
 	-- What the player is in line for ("" when they are not), at which level for a bot, how many ahead of them want the
-	-- same kind of fight, and for a 1v1 whether anyone else is waiting for one.
+	-- same kind of fight, for a 1v1 whether anyone else is waiting for one, and the name of the player they asked to fight
+	-- on the 1V1 pads ("" if nobody).
 	queueMode: string,
 	queueLevel: number,
 	queueAhead: number,
 	alone: boolean,
+	rival: string,
+	-- What the pad the player stands on is doing (see PadView), or "". It takes the chip's place while they are on one.
+	padLine: string,
 }
 
 export type LobbyHud = {
@@ -41,14 +45,18 @@ local function round(instance: Instance, radius: number)
 	corner.Parent = instance
 end
 
--- The chip's line for a place in the queue.
+-- The chip's line: what the player's pad is doing, or their place in the queue.
 function LobbyHud.describe(info: Info): string
+	if info.padLine ~= "" then
+		return info.padLine
+	end
 	if info.queueMode == "" then
 		return ""
 	end
 	local what = if info.queueMode == "bot"
 		then `BOT {BotBrain.Levels[math.clamp(info.queueLevel, 1, BotBrain.LevelCount)].name}`
 		elseif info.queueMode == "training" then "TRAINING"
+		elseif info.rival ~= "" then `1V1 vs {info.rival}`
 		else "1V1"
 	if info.queueMode == "versus" and info.alone then
 		return "1V1  ·  WAITING FOR AN OPPONENT"
@@ -82,7 +90,7 @@ function LobbyHud.new(gui: ScreenGui, onPlay: () -> (), onLeave: () -> ()): Lobb
 	hint.AnchorPoint = Vector2.new(1, 0.5)
 	hint.Position = UDim2.new(1, -12, 0.5, 0)
 	hint.Size = UDim2.fromOffset(24, 20)
-	hint.Text = "M"
+	hint.Text = "P"
 	hint.Font = Enum.Font.GothamBold
 	hint.TextSize = 13
 	hint.TextColor3 = DARK
@@ -160,6 +168,9 @@ function LobbyHud.new(gui: ScreenGui, onPlay: () -> (), onLeave: () -> ()): Lobb
 			play.Visible = not info.hidden
 			local line = LobbyHud.describe(info)
 			chip.Visible = not info.hidden and line ~= ""
+			-- Stepping off is how a pad is let go of; LEAVE is for the line.
+			leave.Visible = info.padLine == ""
+			status.Size = if info.padLine == "" then UDim2.new(1, -(14 + 86), 1, 0) else UDim2.new(1, -28, 1, 0)
 			if status.Text ~= line then
 				status.Text = line
 			end

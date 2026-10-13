@@ -41,6 +41,7 @@ local Leaderboards = require(script.Parent:WaitForChild("Leaderboards"))
 local LobbyHud = require(script.Parent:WaitForChild("LobbyHud"))
 local MatchView = require(script.Parent:WaitForChild("MatchView"))
 local Menu = require(script.Parent:WaitForChild("Menu"))
+local PadView = require(script.Parent:WaitForChild("PadView"))
 local RobotFrames = require(script.Parent:WaitForChild("RobotFrames"))
 local Sfx = require(script.Parent:WaitForChild("Sfx"))
 local StageLights = require(script.Parent:WaitForChild("StageLights"))
@@ -233,6 +234,10 @@ local function playerNumber(name: string): number
 	local value = player:GetAttribute(name)
 	return if type(value) == "number" then value else 0
 end
+local function playerText(name: string): string
+	local value = player:GetAttribute(name)
+	return if type(value) == "string" then value else ""
+end
 
 local hud = Hud.new()
 local menuRemote = ReplicatedStorage:WaitForChild("Menu") :: RemoteEvent
@@ -312,7 +317,7 @@ for index, ring in rings do
 		else Jumbotron.new({
 			faces = screenFaces({ ring.spec.name }),
 			title = ring.spec.label,
-			subtitle = "BOTS AND TRAINING",
+			subtitle = "1V1  ·  BOTS  ·  TRAINING",
 		})
 end
 -- The winches' cables and hooks, the champion's statue, and the leaderboards.
@@ -322,30 +327,18 @@ local leaderboards = Leaderboards.new(foundryState)
 -- The champion when the client started, so only a change of title is announced.
 local knownChampion = foundryState:GetAttribute("ChampionId")
 
--- The pads in front of the main ring open the PLAY card at their own section.
-task.spawn(function()
-	local hall = Workspace:WaitForChild("Foundry")
-	for _, pad in FoundryLayout.Pads do
-		local holder = hall:WaitForChild("Pad" .. pad.name)
-		local prompt = holder:WaitForChild("Open")
-		if prompt:IsA("ProximityPrompt") then
-			prompt.Triggered:Connect(function()
-				if not seated and not garage.isOpen() then
-					menu.open(pad.name)
-				end
-			end)
-		end
-	end
-end)
+-- The pads in front of the main ring: who stands on each, and the countdowns (the server starts the fights, see Pads).
+local padView = PadView.new(foundryState)
 
--- M (Select on a gamepad) opens and closes the PLAY card in the hall. In a ring the same key reaches the server through
--- the training inputs, which leaves a bot match or training.
+-- P (Select on a gamepad) opens and closes the PLAY card in the hall. It sits well away from the punches on J and K. In a
+-- ring the same key reaches the server through the training inputs: held for a moment, it leaves a bot match or
+-- training.
 UserInputService.InputBegan:Connect(function(input: InputObject, processed: boolean)
 	local key = input.KeyCode
 	if processed or seated or garage.isOpen() then
 		return
 	end
-	if key == Enum.KeyCode.M or key == Enum.KeyCode.ButtonSelect then
+	if key == Enum.KeyCode.P or key == Enum.KeyCode.ButtonSelect then
 		if menu.isOpen() then
 			menu.close()
 		else
@@ -405,6 +398,9 @@ while scripted == nil do
 	scripted = InputSetup.findScripted(player)
 end
 local touchControls = TouchControls.new(hud.gui, scripted :: InputSetup.Scripted)
+-- The leave key's state, read here only to draw how far a hold has come (the server decides when it counts).
+local trainingActions = InputSetup.findTraining(player)
+local leaveHeldSince: number? = nil
 
 -- ForceTouchUI lets the touch layout be checked on a desktop.
 local touchUi = false
@@ -858,15 +854,28 @@ RunService.RenderStepped:Connect(function(deltaTime: number)
 		blurbCode = chosenBuild
 		menu.setGarageBlurb(`{Loadout.buildName(Loadout.decode(chosenBuild))}  ·  parts and paint`)
 	end
+	-- The pads' signs are drawn whether or not the player is on one, and in a ring too, where they can be in view.
+	local padLine = padView.step()
 	lobbyHud.update({
 		hidden = seated or menu.isOpen() or garageOpen,
 		queueMode = if queued then queueMode :: string else "",
 		queueLevel = playerNumber("QueueLevel"),
 		queueAhead = playerNumber("QueueAhead"),
 		alone = player:GetAttribute("QueueAlone") == true,
+		rival = playerText("QueueRival"),
+		padLine = if seated then "" else padLine,
 	})
 	touchControls.setTrainingVisible(training and seated)
 	touchControls.setModeVisible(seated and not versus)
+
+	-- Holding the leave key in a bot match or training fills the meter until the server lets the player go.
+	local leaveDown = trainingActions ~= nil and seated and not versus and trainingActions.toggle:GetState() == true
+	if not leaveDown then
+		leaveHeldSince = nil
+	elseif leaveHeldSince == nil then
+		leaveHeldSince = now
+	end
+	hud.setLeaving(if leaveHeldSince ~= nil then (now - leaveHeldSince) / InputSetup.LeaveHold else 0)
 
 	local winsLeft = if slot == 1 then matchView.winsA else matchView.winsB
 	local winsRight = if slot == 1 then matchView.winsB else matchView.winsA

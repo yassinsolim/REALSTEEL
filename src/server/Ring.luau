@@ -34,13 +34,14 @@ export type Ring = {
 	overSince: number?,
 	-- The match whose result has been reported (its reset token, see Rings), so no result counts twice.
 	reported: number,
-	-- The first seat's training keys on the last read.
-	keys: { next: boolean, reset: boolean, toggle: boolean },
+	-- The first seat's training keys on the last read, since when the leave key has been held (nil while it is up), and
+	-- whether that hold has already led out of the ring.
+	keys: { next: boolean, reset: boolean, toggleSince: number?, toggleFired: boolean },
 }
 
 local Ring = {}
 
-local DUMMY_MODE_COUNT = 7
+local DUMMY_MODE_COUNT = 8
 
 -- Stands a character in a booth (`stand`, facing the ring) and keeps it there, or lets it go again (nil).
 function Ring.hold(player: Player?, stand: CFrame?)
@@ -182,15 +183,17 @@ function Ring.cycleDummy(self: Ring)
 	match:SetAttribute("DummyMode", ((if type(dummy) == "number" then dummy else 0) + 1) % DUMMY_MODE_COUNT)
 end
 
--- Which training keys the player in the first seat has pressed since the last read: T (the next dummy), R (reset, or a
--- rematch once a match is over) and M (leave). They come through the Input Action System like every other input, so the
--- server only trusts that player and reads their replicated action states.
-function Ring.pressedKeys(self: Ring): (boolean, boolean, boolean)
+-- Which training keys the player in the first seat has pressed since the last read: T (the next dummy) and R (reset, or
+-- a rematch once a match is over), and whether P (Select on a gamepad) has just been held long enough to leave
+-- (InputSetup.LeaveHold), which happens once per hold. They come through the Input Action System like every other
+-- input, so the server only trusts that player and reads their replicated action states.
+function Ring.pressedKeys(self: Ring, now: number): (boolean, boolean, boolean)
 	local owner = self.owners[1]
 	local actions = if owner ~= nil then InputSetup.findTraining(owner) else nil
 	local keys = self.keys
 	if actions == nil then
-		keys.next, keys.reset, keys.toggle = false, false, false
+		keys.next, keys.reset = false, false
+		keys.toggleSince, keys.toggleFired = nil, false
 		return false, false, false
 	end
 	local nextDown = actions.next:GetState() :: boolean
@@ -198,9 +201,20 @@ function Ring.pressedKeys(self: Ring): (boolean, boolean, boolean)
 	local toggleDown = actions.toggle:GetState() :: boolean
 	local pressedNext = nextDown and not keys.next
 	local pressedReset = resetDown and not keys.reset
-	local pressedToggle = toggleDown and not keys.toggle
-	keys.next, keys.reset, keys.toggle = nextDown, resetDown, toggleDown
-	return pressedNext, pressedReset, pressedToggle
+	keys.next, keys.reset = nextDown, resetDown
+	local leave = false
+	if not toggleDown then
+		keys.toggleSince, keys.toggleFired = nil, false
+	else
+		local since = keys.toggleSince
+		if since == nil then
+			keys.toggleSince = now
+		elseif not keys.toggleFired and now - since >= InputSetup.LeaveHold then
+			keys.toggleFired = true
+			leave = true
+		end
+	end
+	return pressedNext, pressedReset, leave
 end
 
 function Ring.new(world: WorldBuilder.RingWorld, garage: Garage.Garage, now: number): Ring
@@ -216,7 +230,7 @@ function Ring.new(world: WorldBuilder.RingWorld, garage: Garage.Garage, now: num
 		idleSince = now,
 		overSince = nil,
 		reported = -1,
-		keys = { next = false, reset = false, toggle = false },
+		keys = { next = false, reset = false, toggleSince = nil, toggleFired = false },
 	}
 	Ring.apply(self, "idle", 0, {})
 	return self

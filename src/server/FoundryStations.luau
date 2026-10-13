@@ -1,8 +1,8 @@
 --!strict
 
 -- The stations of THE FOUNDRY that players use: the garage bays along the west wall, where every player's robot stands
--- on a lift under their name, and the three pads in front of the ring that open the PLAY card. The server builds them;
--- the clients draw the robots and handle the prompts (see Bays and Main on the client).
+-- on a lift under their name, and the pads in front of the ring that start a fight for whoever stands on them. The
+-- server builds them; the clients draw the robots and the pads' state (see Bays and PadView on the client).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -25,6 +25,9 @@ local STEEL = Color3.fromRGB(46, 51, 66)
 local PANEL = Color3.fromRGB(30, 33, 42)
 local DARK = Color3.fromRGB(14, 16, 22)
 local LAMP = Color3.fromRGB(255, 226, 190)
+local TEAM_BLUE = Color3.fromRGB(70, 140, 255)
+local TEAM_RED = Color3.fromRGB(255, 84, 70)
+local FLOOR_PAINT = Color3.fromRGB(36, 38, 44)
 
 -- The bay dividers are the hall's columns on that side.
 local DIVIDER_X = -57
@@ -169,19 +172,35 @@ function FoundryStations.buildBays(model: Model): { Bay }
 	return bays
 end
 
--- The three pads in front of the ring, each with a sign facing the spawn and a prompt the clients answer. Returns the
--- prompt parts by pad name.
+-- The pads in front of the ring: a glowing disc each, in its seat's team color for the two 1V1 pads, amber for the bot
+-- pads and teal for training, a sign facing the spawn, and VS painted on the floor between the 1V1 pads. The server
+-- reads who stands on them (see Pads) and the clients draw their state. Returns each pad's top by name.
 function FoundryStations.buildPads(model: Model): { [string]: Part }
-	local prompts: { [string]: Part } = {}
+	local tops: { [string]: Part } = {}
+	local versus: { Vector3 } = {}
 	for _, pad in FoundryLayout.Pads do
 		local position = pad.position
-		local color = if pad.name == "Versus" then TEAL else AMBER
+		local color = if pad.kind == "versus"
+			then (if pad.seat == 1 then TEAM_BLUE else TEAM_RED)
+			elseif pad.kind == "bot" then AMBER
+			else TEAL
+		local radius = FoundryLayout.PadRadius
 		-- Opaque, like every glow under a cover (see Build.ringLine).
-		Build.disc(model, "PadGlow", 2.8, 0.06, 0.04, color, Enum.Material.Neon, position.X, position.Z)
 		Build.disc(
 			model,
-			"Pad",
-			2.45,
+			"PadGlow" .. pad.name,
+			radius + 0.35,
+			0.06,
+			0.04,
+			color,
+			Enum.Material.Neon,
+			position.X,
+			position.Z
+		)
+		local top = Build.disc(
+			model,
+			"PadTop" .. pad.name,
+			radius,
 			0.08,
 			0.06,
 			Color3.fromRGB(40, 44, 56),
@@ -189,39 +208,59 @@ function FoundryStations.buildPads(model: Model): { [string]: Part }
 			position.X,
 			position.Z
 		)
+		tops[pad.name] = top
 
-		local signAt = position + Vector3.new(0, 0, -3.4)
-		Build.vbar(model, "SignPost", signAt, 5, 0.3, STEEL, Enum.Material.Metal)
+		if pad.kind == "versus" then
+			table.insert(versus, position)
+		else
+			local signAt = position + Vector3.new(0, 0, -3.4)
+			Build.vbar(model, "SignPost", signAt, 5, 0.3, STEEL, Enum.Material.Metal)
+			local sign = Build.decor(
+				model,
+				"Sign" .. pad.name,
+				Vector3.new(5.6, 1.5, 0.3),
+				facing(signAt + Vector3.new(0, 5.5, 0), Vector3.zAxis),
+				DARK,
+				Enum.Material.SmoothPlastic
+			)
+			Build.label(
+				sign,
+				if pad.kind == "bot" then `BOT · {pad.label}` else pad.label,
+				Enum.Font.GothamBlack,
+				color,
+				40
+			)
+		end
+	end
+
+	-- The 1V1 pads share one sign between them, and VS on the floor.
+	if #versus == 2 then
+		local middle = (versus[1] + versus[2]) / 2
+		local signAt = middle + Vector3.new(0, 0, -3.4)
+		for _, side in { -2.6, 2.6 } do
+			Build.vbar(model, "SignPost", signAt + Vector3.new(side, 0, 0), 5.2, 0.3, STEEL, Enum.Material.Metal)
+		end
 		local sign = Build.decor(
 			model,
-			"Sign",
-			Vector3.new(5.6, 1.5, 0.3),
-			facing(signAt + Vector3.new(0, 5.5, 0), Vector3.zAxis),
+			"SignVersus",
+			Vector3.new(6.8, 1.8, 0.3),
+			facing(signAt + Vector3.new(0, 5.8, 0), Vector3.zAxis),
 			DARK,
 			Enum.Material.SmoothPlastic
 		)
-		Build.label(sign, pad.label, Enum.Font.GothamBlack, color, 40)
-
-		local holder = Build.decor(
+		Build.label(sign, "1V1", Enum.Font.GothamBlack, Color3.new(1, 1, 1), 40)
+		local mark = Build.decor(
 			model,
-			"Pad" .. pad.name,
-			Vector3.one,
-			CFrame.new(position + Vector3.new(0, 2.5, 0)),
-			color,
+			"VersusMark",
+			Vector3.new(2.6, 0.02, 1.6),
+			CFrame.new(middle.X, 0.02, middle.Z),
+			FLOOR_PAINT,
 			Enum.Material.SmoothPlastic
 		)
-		holder.Transparency = 1
-		local prompt = Instance.new("ProximityPrompt")
-		prompt.Name = "Open"
-		prompt.ActionText = "OPEN"
-		prompt.ObjectText = pad.label
-		prompt.HoldDuration = 0
-		prompt.MaxActivationDistance = 9
-		prompt.RequiresLineOfSight = false
-		prompt.Parent = holder
-		prompts[pad.name] = holder
+		mark.Transparency = 1
+		Build.label(mark, "VS", Enum.Font.GothamBlack, AMBER, 40, Enum.NormalId.Top)
 	end
-	return prompts
+	return tops
 end
 
 return FoundryStations

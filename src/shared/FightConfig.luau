@@ -14,6 +14,8 @@ export type MoveData = {
 	recovery: number,
 	damage: number,
 	chip: number,
+	-- What it takes off the guard bar when it is blocked (see Guard).
+	guard: number,
 	reach: number,
 	hitRadius: number,
 	hitstun: number,
@@ -30,8 +32,49 @@ export type DashData = {
 	speed: number,
 }
 
+-- The guard bar, so nobody can hold the guard up forever. It loses `holdDrain` points every frame the guard is held and a
+-- move's `guard` points every time one is blocked. Once nothing has been guarded for `regenDelay` frames it fills back
+-- up by `regen` points a frame. When it runs out the guard breaks: the fighter is wide open for `breakFrames` frames
+-- (the blow that broke it freezes the pair `breakHitstop` frames longer), and the bar starts again at `refill`.
+export type GuardData = {
+	max: number,
+	holdDrain: number,
+	regenDelay: number,
+	regen: number,
+	breakFrames: number,
+	breakHitstop: number,
+	refill: number,
+}
+
+-- The throw, which beats a guard. Pressing both punches together grabs: startup, active and recovery frames like an
+-- attack, catching an opponent no farther than `range` (center to center) in front. Any attack beats it, since an
+-- opponent who is attacking cannot be caught until the attack is over, and so does a stun: an opponent in hitstun or
+-- blockstun cannot be caught either. Once caught, the thrower throws for `hold` frames; on the `slam`th the one thrown
+-- hits the canvas for `damage` and slides away at `knockback`, and gets up after `down` frames in all. Grabbing back
+-- within `breakWindow` frames of the catch breaks free: both are shoved apart at `breakPush` for `breakFrames` frames.
+-- The second punch may come up to `chord` frames after the first, and a jab or straight up to `cancel` frames into its
+-- startup still turns into the grab.
+export type ThrowData = {
+	startup: number,
+	active: number,
+	recovery: number,
+	range: number,
+	damage: number,
+	hold: number,
+	slam: number,
+	down: number,
+	knockback: number,
+	breakWindow: number,
+	breakFrames: number,
+	breakPush: number,
+	catchHitstop: number,
+	slamHitstop: number,
+	chord: number,
+	cancel: number,
+}
+
 -- Everything about a fighter that a chassis or a module can change. Each fighter carries one of these, so the same
--- simulation plays every build. The last four values describe what the fighter suffers rather than what it does, and stay
+-- simulation plays every build. The last five values describe what the fighter suffers rather than what it does, and stay
 -- at their neutral values unless a build says otherwise.
 export type Stats = {
 	maxHp: number,
@@ -43,6 +86,8 @@ export type Stats = {
 	moves: { MoveData },
 	-- Multiplier on the chip damage taken while blocking (0 takes none).
 	chipTaken: number,
+	-- Multiplier on what the guard bar loses, to blocked moves and to holding the guard up.
+	guardTaken: number,
 	-- Frames added to the blockstun and the hitstun suffered, and the multiplier on the knockback suffered.
 	blockstunTaken: number,
 	hitstunTaken: number,
@@ -76,6 +121,7 @@ local MOVES = {
 		recovery = 11,
 		damage = 8,
 		chip = 1,
+		guard = 70,
 		reach = 2.6,
 		hitRadius = 1.1,
 		hitstun = 18,
@@ -93,6 +139,7 @@ local MOVES = {
 		recovery = 17,
 		damage = 16,
 		chip = 2,
+		guard = 170,
 		reach = 3.3,
 		hitRadius = 1.2,
 		hitstun = 22,
@@ -110,6 +157,7 @@ local MOVES = {
 		recovery = 15,
 		damage = 11,
 		chip = 1,
+		guard = 130,
 		reach = 2.2,
 		hitRadius = 1.0,
 		hitstun = 20,
@@ -127,6 +175,7 @@ local MOVES = {
 		recovery = 22,
 		damage = 24,
 		chip = 3,
+		guard = 260,
 		reach = 2.4,
 		hitRadius = 1.1,
 		hitstun = 29,
@@ -136,6 +185,41 @@ local MOVES = {
 		hitstop = 12,
 	},
 } :: { MoveData }
+
+-- A full bar lasts 20 seconds of holding the guard with nothing coming in, or about seven straights or fifteen jabs
+-- blocked back to back, and fills back up in about four seconds once the guard comes down. A broken guard is open long
+-- enough for any attack to land.
+local GUARD: GuardData = {
+	max = 1200,
+	holdDrain = 1,
+	regenDelay = 45,
+	regen = 6,
+	breakFrames = 60,
+	breakHitstop = 10,
+	refill = 600,
+}
+
+-- Slower than every attack (the jab hits on frame 8, the grab catches from frame 11) and a long whiff, so it only works
+-- on a guard or on someone finishing a move. A throw leaves the thrower 18 frames ahead with the other robot still
+-- getting up a few studs away.
+local THROW: ThrowData = {
+	startup = 10,
+	active = 2,
+	recovery = 26,
+	range = 3.3,
+	damage = 18,
+	hold = 46,
+	slam = 28,
+	down = 64,
+	knockback = 12,
+	breakWindow = 18,
+	breakFrames = 22,
+	breakPush = 14,
+	catchHitstop = 5,
+	slamHitstop = 9,
+	chord = 2,
+	cancel = 3,
+}
 
 local FightConfig = {
 	SimHz = 60,
@@ -174,6 +258,8 @@ local FightConfig = {
 	SnapKickMoveId = 3,
 	PowerKickMoveId = 4,
 	Dash = DASH,
+	Guard = GUARD,
+	Throw = THROW,
 	-- Rounds. A match is first to `roundsToWin`; a round ends on a KO or when the clock runs out (more health wins).
 	Match = {
 		roundsToWin = 2,
@@ -193,6 +279,7 @@ local FightConfig = {
 		dash = DASH,
 		moves = MOVES,
 		chipTaken = 1,
+		guardTaken = 1,
 		blockstunTaken = 0,
 		hitstunTaken = 0,
 		knockbackTaken = 1,

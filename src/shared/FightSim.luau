@@ -31,6 +31,13 @@ export type Fighter = {
 	dashFwd: number,
 	dashSide: number,
 	healDelay: number,
+	-- The guard bar (see FightConfig.Guard), and frames left before it starts filling again.
+	guard: number,
+	guardDelay: number,
+	-- Frames since each punch was last pressed (counting stops at AGE_CAP), so both pressed together read as a grab.
+	jabAge: number,
+	straightAge: number,
+	prevGrab: boolean,
 	-- What this fighter's chassis and modules change: health, speeds, frame data. Shared by every fighter that has the same
 	-- build, and never modified by the simulation.
 	stats: FightConfig.Stats,
@@ -46,6 +53,8 @@ export type Input = {
 	rightKick: boolean,
 	guard: boolean,
 	dash: boolean,
+	-- A grab of its own (the touch controls' GRAB button). Both punches pressed together grab too.
+	grab: boolean,
 }
 
 export type Options = {
@@ -64,6 +73,15 @@ local State = {
 	Guard = 4,
 	Blockstun = 5,
 	Dash = 6,
+	-- The guard bar ran out: wide open until the break is over (FightConfig.Guard).
+	GuardBreak = 7,
+	-- A grab on its way out, timed like an attack.
+	Grab = 8,
+	-- A grab caught: the one who grabbed throws, the other is thrown and gets up again.
+	Throw = 9,
+	Thrown = 10,
+	-- The one caught grabbed back in time, and both were shoved apart.
+	ThrowBreak = 11,
 }
 
 local Action = {
@@ -73,6 +91,7 @@ local Action = {
 	Dash = 3,
 	LeftKick = 4,
 	RightKick = 5,
+	Grab = 6,
 }
 
 -- Which move each attack button starts.
@@ -86,9 +105,15 @@ local ATTACK_MOVES: { [number]: number } = {
 local DEFAULT_OPTIONS: Options = { training = false }
 -- A build can shorten the stun it suffers, but never to nothing.
 local MIN_STUN = 6
+-- How far back the punch presses are counted; anything older is as good as never.
+local AGE_CAP = 30
+-- A grab only catches an opponent in front of it: within about 60 degrees of where it reaches.
+local GRAB_FACING = 0.5
 
 local FightSim = {}
 FightSim.State = State
+FightSim.Action = Action
+FightSim.AgeCap = AGE_CAP
 
 local function quantize(value: number): number
 	return math.floor(value * FightConfig.Quantum + 0.5) / FightConfig.Quantum
@@ -118,6 +143,11 @@ function FightSim.resetFighter(fighter: Fighter, x: number, z: number)
 	fighter.dashFwd = 0
 	fighter.dashSide = 0
 	fighter.healDelay = 0
+	fighter.guard = FightConfig.Guard.max
+	fighter.guardDelay = 0
+	fighter.jabAge = AGE_CAP
+	fighter.straightAge = AGE_CAP
+	fighter.prevGrab = false
 end
 
 function FightSim.newFighter(x: number, z: number): Fighter
@@ -145,6 +175,11 @@ function FightSim.newFighter(x: number, z: number): Fighter
 		dashFwd = 0,
 		dashSide = 0,
 		healDelay = 0,
+		guard = FightConfig.Guard.max,
+		guardDelay = 0,
+		jabAge = AGE_CAP,
+		straightAge = AGE_CAP,
+		prevGrab = false,
 		stats = FightConfig.BaseStats,
 	}
 	return fighter
@@ -160,6 +195,7 @@ function FightSim.newInput(): Input
 		rightKick = false,
 		guard = false,
 		dash = false,
+		grab = false,
 	}
 end
 
@@ -191,16 +227,26 @@ local function direction(a: Fighter, b: Fighter): (number, number, number)
 	return dx / dist, dz / dist, dist
 end
 
--- Remembers the latest button press for a few frames so inputs a little early still count.
+-- Remembers the latest button press for a few frames so inputs a little early still count. Both punches pressed within
+-- FightConfig.Throw.chord frames of each other are a grab.
 local function registerInput(fighter: Fighter, input: Input)
+	local jabPressed = input.jab and not fighter.prevJab
+	local straightPressed = input.straight and not fighter.prevStraight
+	fighter.jabAge = if jabPressed then 0 else math.min(fighter.jabAge + 1, AGE_CAP)
+	fighter.straightAge = if straightPressed then 0 else math.min(fighter.straightAge + 1, AGE_CAP)
+	local chord = FightConfig.Throw.chord
+	local grabbed = (input.grab and not fighter.prevGrab)
+		or (jabPressed and fighter.straightAge <= chord)
+		or (straightPressed and fighter.jabAge <= chord)
+
 	local pressed = Action.None
 	if input.dash and not fighter.prevDash then
 		pressed = Action.Dash
 	end
-	if input.jab and not fighter.prevJab then
+	if jabPressed then
 		pressed = Action.Jab
 	end
-	if input.straight and not fighter.prevStraight then
+	if straightPressed then
 		pressed = Action.Straight
 	end
 	if input.leftKick and not fighter.prevLeftKick then
@@ -208,6 +254,9 @@ local function registerInput(fighter: Fighter, input: Input)
 	end
 	if input.rightKick and not fighter.prevRightKick then
 		pressed = Action.RightKick
+	end
+	if grabbed then
+		pressed = Action.Grab
 	end
 
 	if pressed ~= Action.None then
@@ -225,6 +274,7 @@ local function registerInput(fighter: Fighter, input: Input)
 	fighter.prevLeftKick = input.leftKick
 	fighter.prevRightKick = input.rightKick
 	fighter.prevDash = input.dash
+	fighter.prevGrab = input.grab
 end
 
 local function startAttack(fighter: Fighter, moveId: number, dirX: number, dirZ: number)
@@ -263,6 +313,45 @@ local function startDash(fighter: Fighter, input: Input)
 	fighter.actionBuffer = 0
 end
 
+-- Reaches out with both hands along the direction the fighter faces, which stays locked like an attack's aim.
+local function startGrab(fighter: Fighter, dirX: number, dirZ: number)
+	fighter.state = State.Grab
+	fighter.stateFrame = 0
+	fighter.moveId = 0
+	fighter.hitDone = false
+	fighter.aimX = dirX
+	fighter.aimZ = dirZ
+	fighter.vx = 0
+	fighter.vz = 0
+	fighter.action = Action.None
+	fighter.actionBuffer = 0
+end
+
+-- The punches a grab's second button can still turn into the grab, early in their startup.
+local function isPunch(moveId: number): boolean
+	return moveId == FightConfig.JabMoveId or moveId == FightConfig.StraightMoveId
+end
+
+-- Leaving a broken guard by any way, back on its feet or knocked out of it, the bar starts again at the refill.
+local function endBreak(fighter: Fighter)
+	if fighter.state == State.GuardBreak then
+		fighter.guard = FightConfig.Guard.refill
+		fighter.guardDelay = FightConfig.Guard.regenDelay
+	end
+end
+
+local function breakGuard(fighter: Fighter)
+	fighter.state = State.GuardBreak
+	fighter.stateFrame = 0
+	fighter.stun = FightConfig.Guard.breakFrames
+	fighter.guard = 0
+	fighter.moveId = 0
+	fighter.action = Action.None
+	fighter.actionBuffer = 0
+	fighter.vx = 0
+	fighter.vz = 0
+end
+
 -- Moves the fighter's state machine forward one frame. dirX/dirZ is the direction the fighter is facing.
 local function advance(fighter: Fighter, input: Input, dirX: number, dirZ: number)
 	if fighter.state == State.KO then
@@ -272,9 +361,18 @@ local function advance(fighter: Fighter, input: Input, dirX: number, dirZ: numbe
 		return
 	end
 
-	if fighter.state == State.Hitstun or fighter.state == State.Blockstun then
+	-- Every state that just runs its course: the stuns, a broken guard, being thrown and a broken throw.
+	local state = fighter.state
+	if
+		state == State.Hitstun
+		or state == State.Blockstun
+		or state == State.GuardBreak
+		or state == State.Thrown
+		or state == State.ThrowBreak
+	then
 		fighter.stateFrame += 1
 		if fighter.stateFrame >= fighter.stun then
+			endBreak(fighter)
 			fighter.state = if input.guard then State.Guard else State.Idle
 			fighter.stateFrame = 0
 			fighter.vx = 0
@@ -286,7 +384,39 @@ local function advance(fighter: Fighter, input: Input, dirX: number, dirZ: numbe
 		return
 	end
 
-	if fighter.state == State.Attack then
+	if state == State.Throw then
+		fighter.stateFrame += 1
+		fighter.vx = 0
+		fighter.vz = 0
+		if fighter.stateFrame >= fighter.stun then
+			fighter.state = if input.guard then State.Guard else State.Idle
+			fighter.stateFrame = 0
+		end
+		return
+	end
+
+	if state == State.Grab then
+		fighter.stateFrame += 1
+		fighter.vx = 0
+		fighter.vz = 0
+		local throw = FightConfig.Throw
+		if fighter.stateFrame > throw.startup + throw.active + throw.recovery then
+			fighter.state = State.Idle
+			fighter.stateFrame = 0
+		end
+		return
+	end
+
+	if state == State.Attack then
+		-- The second punch of a grab came a frame or two after the first: the punch that started becomes the grab.
+		if
+			fighter.action == Action.Grab
+			and fighter.stateFrame < FightConfig.Throw.cancel
+			and isPunch(fighter.moveId)
+		then
+			startGrab(fighter, dirX, dirZ)
+			return
+		end
 		fighter.stateFrame += 1
 		local move = fighter.stats.moves[fighter.moveId]
 		if fighter.stateFrame > move.startup + move.active + move.recovery then
@@ -299,7 +429,7 @@ local function advance(fighter: Fighter, input: Input, dirX: number, dirZ: numbe
 		return
 	end
 
-	if fighter.state == State.Dash then
+	if state == State.Dash then
 		fighter.stateFrame += 1
 		local dash = fighter.stats.dash
 		fighter.vx = 0
@@ -318,6 +448,10 @@ local function advance(fighter: Fighter, input: Input, dirX: number, dirZ: numbe
 	end
 
 	-- Idle or Guard: the fighter can act.
+	if fighter.action == Action.Grab then
+		startGrab(fighter, dirX, dirZ)
+		return
+	end
 	local attackMove = ATTACK_MOVES[fighter.action]
 	if attackMove ~= nil then
 		startAttack(fighter, attackMove, dirX, dirZ)
@@ -350,9 +484,34 @@ local function advance(fighter: Fighter, input: Input, dirX: number, dirZ: numbe
 	fighter.vz = dirZ * forward * forwardSpeed + rightZ * side * stats.strafe
 end
 
--- Returns the move if the attacker's active hitbox overlaps the defender this frame.
+-- The guard bar for one frame: holding the guard drains it (and may break it), a block keeps it from refilling, and
+-- otherwise it fills back up once the guard has been down for a while.
+local function tickGuard(fighter: Fighter)
+	local guard = FightConfig.Guard
+	local state = fighter.state
+	if state == State.Guard then
+		fighter.guardDelay = guard.regenDelay
+		fighter.guard -= guard.holdDrain * fighter.stats.guardTaken
+		if fighter.guard <= 0 then
+			breakGuard(fighter)
+		end
+	elseif state == State.Blockstun then
+		fighter.guardDelay = guard.regenDelay
+	elseif state ~= State.GuardBreak and fighter.guard < guard.max then
+		if fighter.guardDelay > 0 then
+			fighter.guardDelay -= 1
+		else
+			fighter.guard = math.min(fighter.guard + guard.regen, guard.max)
+		end
+	end
+end
+
+-- Returns the move if the attacker's active hitbox overlaps the defender this frame. A throw in progress cannot be hit.
 local function connects(attacker: Fighter, defender: Fighter): FightConfig.MoveData?
 	if attacker.state ~= State.Attack or attacker.hitDone or defender.state == State.KO then
+		return nil
+	end
+	if defender.state == State.Thrown or defender.state == State.Throw then
 		return nil
 	end
 	local move = attacker.stats.moves[attacker.moveId]
@@ -382,8 +541,14 @@ function FightSim.chipFor(move: FightConfig.MoveData, suffered: FightConfig.Stat
 	return math.floor(move.chip * suffered.chipTaken + 0.5)
 end
 
+-- What blocking a move takes off the guard bar of a defender with the given stats.
+function FightSim.guardDamageFor(move: FightConfig.MoveData, suffered: FightConfig.Stats): number
+	return move.guard * suffered.guardTaken
+end
+
 local function applyHit(attacker: Fighter, defender: Fighter, move: FightConfig.MoveData, training: boolean)
 	local blocked = defender.state == State.Guard or defender.state == State.Blockstun
+	endBreak(defender)
 	attacker.hitDone = true
 	attacker.hitstop = math.max(attacker.hitstop, move.hitstop)
 	defender.hitstop = math.max(defender.hitstop, move.hitstop)
@@ -400,8 +565,18 @@ local function applyHit(attacker: Fighter, defender: Fighter, move: FightConfig.
 	defender.hp = math.max(defender.hp - damage, floorHp)
 
 	if blocked then
-		defender.state = State.Blockstun
-		defender.stun = FightSim.blockstunFor(move, suffered)
+		defender.guard -= FightSim.guardDamageFor(move, suffered)
+		defender.guardDelay = FightConfig.Guard.regenDelay
+		if defender.guard <= 0 then
+			-- The block that empties the bar breaks the guard, and the moment hangs a little longer.
+			breakGuard(defender)
+			local freeze = move.hitstop + FightConfig.Guard.breakHitstop
+			attacker.hitstop = math.max(attacker.hitstop, freeze)
+			defender.hitstop = math.max(defender.hitstop, freeze)
+		else
+			defender.state = State.Blockstun
+			defender.stun = FightSim.blockstunFor(move, suffered)
+		end
 		defender.vx = attacker.aimX * move.blockPush * suffered.knockbackTaken
 		defender.vz = attacker.aimZ * move.blockPush * suffered.knockbackTaken
 	elseif defender.hp <= 0 then
@@ -417,6 +592,115 @@ local function applyHit(attacker: Fighter, defender: Fighter, move: FightConfig.
 		defender.vx = attacker.aimX * move.knockback * suffered.knockbackTaken
 		defender.vz = attacker.aimZ * move.knockback * suffered.knockbackTaken
 	end
+end
+
+-- Whether a fighter can be caught by a grab: standing, guarding, dashing, wide open, grabbing itself, or finishing an
+-- attack. An attack still on its way beats the grab, and a stun protects whoever is in it.
+local function throwable(fighter: Fighter): boolean
+	local state = fighter.state
+	if
+		state == State.Idle
+		or state == State.Guard
+		or state == State.Dash
+		or state == State.GuardBreak
+		or state == State.Grab
+	then
+		return true
+	end
+	if state == State.Attack then
+		local move = fighter.stats.moves[fighter.moveId]
+		return move ~= nil and fighter.stateFrame > move.startup + move.active
+	end
+	return false
+end
+
+-- Whether the attacker's grab catches the defender this frame: in its active frames, close enough, and in front of it.
+local function catches(attacker: Fighter, defender: Fighter): boolean
+	local throw = FightConfig.Throw
+	if attacker.state ~= State.Grab or attacker.stateFrame <= throw.startup then
+		return false
+	end
+	if attacker.stateFrame > throw.startup + throw.active or not throwable(defender) then
+		return false
+	end
+	local dx = defender.x - attacker.x
+	local dz = defender.z - attacker.z
+	local distance = math.sqrt(dx * dx + dz * dz)
+	if distance > throw.range then
+		return false
+	end
+	return distance < 1e-4 or (dx * attacker.aimX + dz * attacker.aimZ) / distance >= GRAB_FACING
+end
+
+local function holdStill(fighter: Fighter, state: number, frames: number)
+	endBreak(fighter)
+	fighter.state = state
+	fighter.stateFrame = 0
+	fighter.stun = frames
+	fighter.moveId = 0
+	fighter.hitDone = false
+	fighter.vx = 0
+	fighter.vz = 0
+	fighter.action = Action.None
+	fighter.actionBuffer = 0
+end
+
+local function applyCatch(thrower: Fighter, thrown: Fighter)
+	local throw = FightConfig.Throw
+	holdStill(thrower, State.Throw, throw.hold)
+	holdStill(thrown, State.Thrown, throw.down)
+	thrown.healDelay = FightConfig.TrainingHealDelay
+	thrower.hitstop = math.max(thrower.hitstop, throw.catchHitstop)
+	thrown.hitstop = math.max(thrown.hitstop, throw.catchHitstop)
+end
+
+-- Both are shoved apart, out of a throw broken in time or out of two grabs that caught each other.
+local function breakThrow(a: Fighter, b: Fighter)
+	local throw = FightConfig.Throw
+	local dirX, dirZ = direction(a, b)
+	holdStill(a, State.ThrowBreak, throw.breakFrames)
+	holdStill(b, State.ThrowBreak, throw.breakFrames)
+	a.vx = -dirX * throw.breakPush
+	a.vz = -dirZ * throw.breakPush
+	b.vx = dirX * throw.breakPush
+	b.vz = dirZ * throw.breakPush
+	a.hitstop = math.max(a.hitstop, throw.catchHitstop)
+	b.hitstop = math.max(b.hitstop, throw.catchHitstop)
+end
+
+-- A throw under way: the one thrown may still break free, and on the slam frame it hits the canvas. The damage only
+-- counts while the fight is on, and like any hit in training it never knocks anyone out.
+local function progressThrow(thrower: Fighter, thrown: Fighter, combat: boolean, training: boolean)
+	if thrower.state ~= State.Throw or thrown.state ~= State.Thrown or thrower.hitDone then
+		return
+	end
+	local throw = FightConfig.Throw
+	if thrown.stateFrame <= throw.breakWindow and thrown.action == Action.Grab then
+		breakThrow(thrower, thrown)
+		return
+	end
+	if thrower.stateFrame < throw.slam then
+		return
+	end
+	thrower.hitDone = true
+	thrower.hitstop = math.max(thrower.hitstop, throw.slamHitstop)
+	thrown.hitstop = math.max(thrown.hitstop, throw.slamHitstop)
+	if not combat then
+		return
+	end
+	thrown.hp = math.max(thrown.hp - throw.damage, if training then 1 else 0)
+	thrown.healDelay = FightConfig.TrainingHealDelay
+	if thrown.hp <= 0 then
+		thrown.state = State.KO
+		thrown.stateFrame = 0
+		thrower.hitstop = math.max(thrower.hitstop, FightConfig.KoFreezeFrames)
+		thrown.hitstop = math.max(thrown.hitstop, FightConfig.KoFreezeFrames)
+		return
+	end
+	local dirX, dirZ = direction(thrower, thrown)
+	local knockback = throw.knockback * thrown.stats.knockbackTaken
+	thrown.vx = dirX * knockback
+	thrown.vz = dirZ * knockback
 end
 
 local function clampToRing(fighter: Fighter)
@@ -486,18 +770,33 @@ function FightSim.step(a: Fighter, b: Fighter, inputA: Input, inputB: Input, opt
 
 	advance(a, inputA, dirX, dirZ)
 	advance(b, inputB, -dirX, -dirZ)
+	tickGuard(a)
+	tickGuard(b)
 
-	-- Resolve both attackers against the pre-hit states so trades are symmetric.
-	if settings.combat ~= false then
+	-- Resolve both attackers against the pre-hit states so trades are symmetric. A strike beats a grab: whoever is hit
+	-- this frame catches nothing, and two grabs that catch each other cancel out.
+	local combat = settings.combat ~= false
+	if combat then
 		local moveA = connects(a, b)
 		local moveB = connects(b, a)
+		local catchA = moveB == nil and catches(a, b)
+		local catchB = moveA == nil and catches(b, a)
 		if moveA ~= nil then
 			applyHit(a, b, moveA, training)
 		end
 		if moveB ~= nil then
 			applyHit(b, a, moveB, training)
 		end
+		if catchA and catchB then
+			breakThrow(a, b)
+		elseif catchA then
+			applyCatch(a, b)
+		elseif catchB then
+			applyCatch(b, a)
+		end
 	end
+	progressThrow(a, b, combat, training)
+	progressThrow(b, a, combat, training)
 
 	integrate(a, b)
 
@@ -532,7 +831,8 @@ local function holdSpacing(me: Fighter, foe: Fighter, target: number): number
 end
 
 -- Scripted opponent. Modes: 0 idle, 1 guard, 2 jab loop, 3 straight loop, 4 mixed, 5 snap kick loop, 6 power kick
--- loop. Depends only on the frame number and fighter state, so the client and server compute the same inputs.
+-- loop, 7 grab loop. Depends only on the frame number and fighter state, so the client and server compute the same
+-- inputs.
 function FightSim.dummyInput(frame: number, me: Fighter, foe: Fighter, into: Input, mode: number)
 	into.moveX = 0
 	into.moveZ = 0
@@ -542,6 +842,7 @@ function FightSim.dummyInput(frame: number, me: Fighter, foe: Fighter, into: Inp
 	into.rightKick = false
 	into.guard = false
 	into.dash = false
+	into.grab = false
 
 	local segment = mode
 	if mode == 4 then
@@ -566,6 +867,9 @@ function FightSim.dummyInput(frame: number, me: Fighter, foe: Fighter, into: Inp
 	elseif segment == 6 or segment == 15 then
 		into.moveZ = holdSpacing(me, foe, 3.9)
 		into.rightKick = frame % 100 == 50
+	elseif segment == 7 then
+		into.moveZ = holdSpacing(me, foe, 2.6)
+		into.grab = frame % 90 == 45
 	end
 end
 
@@ -582,6 +886,21 @@ function FightSim.attackPhase(fighter: Fighter): (string?, number)
 		return "active", (frame - move.startup) / move.active
 	end
 	return "recovery", (frame - move.startup - move.active) / move.recovery
+end
+
+-- The same for a grab on its way out.
+function FightSim.grabPhase(fighter: Fighter): (string?, number)
+	if fighter.state ~= State.Grab then
+		return nil, 0
+	end
+	local throw = FightConfig.Throw
+	local frame = fighter.stateFrame
+	if frame <= throw.startup then
+		return "startup", frame / throw.startup
+	elseif frame <= throw.startup + throw.active then
+		return "active", (frame - throw.startup) / throw.active
+	end
+	return "recovery", (frame - throw.startup - throw.active) / throw.recovery
 end
 
 return FightSim

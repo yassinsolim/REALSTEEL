@@ -1,14 +1,15 @@
 --!strict
 
 -- Server: the line for the rings and what the hall is told about them. Players queue for a fight through the Menu remote
--- (see RingQueue for who gets which ring); when their turn comes their ring (see Ring) seats them, and when the match is
--- over the ring is handed on. While nobody wants the main ring, two bots put on an exhibition in it, so there is always a
--- fight to watch.
+-- or the pads in front of the main ring (see Pads; see RingQueue for who gets which ring); when their turn comes their
+-- ring (see Ring) seats them, and when the match is over the ring is handed on. While nobody wants the main ring, two
+-- bots put on an exhibition in it, so there is always a fight to watch.
 --
 -- What the clients need to know is published as attributes, none of them on a predicted core, where every change would
 -- roll the clients back: per ring on a folder named after it in `state` (Session, NextUp, RematchOpen, HandoverAt), the
 -- number waiting on `state` itself, and each player's place on the Player (QueueMode, QueueLevel, QueueAhead, QueueAlone,
--- InRing, and Ring, the number of the ring they are in or 0).
+-- QueueRival, the name of the player they asked to fight on the 1V1 pads or "", InRing, and Ring, the number of the ring
+-- they are in or 0).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -25,6 +26,10 @@ local WorldBuilder = require(script.Parent.WorldBuilder)
 export type Rings = {
 	-- A request from the Menu remote: "bot" (with a level), "training", "versus", "leave", "rematch" or "menu" (leave).
 	request: (player: Player, action: string, level: number?) -> (),
+	-- Two players asked for a 1v1 against each other on the 1V1 pads; `first` takes the first seat.
+	pair: (first: Player, second: Player) -> (),
+	-- Whether a player is in a ring now.
+	seated: (player: Player) -> boolean,
 	-- Call when a player leaves the game.
 	remove: (player: Player) -> (),
 	-- Call when a player's character spawns, so a player in a ring is put back in their booth.
@@ -200,12 +205,6 @@ function Rings.new(world: WorldBuilder.World, garage: Garage.Garage, state: Inst
 		end
 		setIfChanged(state, "Waiting", #queue.entries)
 
-		local versusWaiting = 0
-		for _, entry in queue.entries do
-			if entry.mode == "versus" then
-				versusWaiting += 1
-			end
-		end
 		for _, player in Players:GetPlayers() do
 			local entry, ahead = RingQueue.find(queue, player.UserId)
 			local session = RingQueue.sessionOf(queue, player.UserId)
@@ -213,7 +212,9 @@ function Rings.new(world: WorldBuilder.World, garage: Garage.Garage, state: Inst
 			setIfChanged(player, "QueueLevel", if entry ~= nil then entry.level else 0)
 			setIfChanged(player, "QueueAhead", ahead)
 			-- A 1v1 waits for a second player, however far ahead it is.
-			setIfChanged(player, "QueueAlone", entry ~= nil and entry.mode == "versus" and versusWaiting < 2)
+			setIfChanged(player, "QueueAlone", RingQueue.alone(queue, player.UserId))
+			local rival = if entry ~= nil then entry.partner else nil
+			setIfChanged(player, "QueueRival", if rival ~= nil then nameOf(rival) else "")
 			setIfChanged(player, "InRing", session ~= nil)
 			setIfChanged(player, "Ring", if session ~= nil then session.ring else 0)
 		end
@@ -295,10 +296,11 @@ function Rings.new(world: WorldBuilder.World, garage: Garage.Garage, state: Inst
 			step()
 		end
 
-		-- The training keys of each ring's first seat. M leaves a bot match or training, never a 1v1.
+		-- The training keys of each ring's first seat. Holding P leaves a bot match or training, never a 1v1.
+		local clock = os.clock()
 		for _, ring in rings do
 			local owner = ring.owners[1]
-			local pressedNext, pressedReset, pressedToggle = Ring.pressedKeys(ring)
+			local pressedNext, pressedReset, leave = Ring.pressedKeys(ring, clock)
 			if owner ~= nil then
 				if pressedNext and ring.mode == "training" then
 					Ring.cycleDummy(ring)
@@ -310,7 +312,7 @@ function Rings.new(world: WorldBuilder.World, garage: Garage.Garage, state: Inst
 						request(owner, "rematch", nil)
 					end
 				end
-				if pressedToggle and (ring.mode == "training" or ring.mode == "bot") then
+				if leave and (ring.mode == "training" or ring.mode == "bot") then
 					request(owner, "leave", nil)
 				end
 			end
@@ -320,6 +322,14 @@ function Rings.new(world: WorldBuilder.World, garage: Garage.Garage, state: Inst
 	step()
 	return {
 		request = request,
+		pair = function(first: Player, second: Player)
+			if RingQueue.joinPair(queue, first.UserId, second.UserId, os.clock()) then
+				step()
+			end
+		end,
+		seated = function(player: Player): boolean
+			return RingQueue.inSession(queue, player.UserId)
+		end,
 		remove = function(player: Player)
 			-- Dropping out of a 1v1 that is still on loses it, like walking out does, once it is clear the server is not
 			-- shutting down (see DROPOUT_GRACE).

@@ -55,7 +55,6 @@ return function(): (number, { string })
 	for index, spec in rings do
 		if index > 1 then
 			check(`{spec.name} is a pit`, spec.pit)
-			check(`{spec.name} hosts no 1v1s`, not spec.versus)
 		end
 		if names[spec.name] then
 			unique = false
@@ -67,6 +66,72 @@ return function(): (number, { string })
 	end
 	check("ring names are unique", unique)
 	check("the main ring hosts 1v1s and the exhibitions", rings[1].versus and rings[1].exhibitions)
+	local everyRingFights = true
+	for _, spec in rings do
+		everyRingFights = everyRingFights and spec.versus and spec.solo
+	end
+	check("every ring hosts 1v1s and practice, so the pits take the 1v1s the main ring cannot", everyRingFights)
+	check(
+		"1v1s go to the main ring first and practice to the pits",
+		rings[1].rank > (if rings[2] ~= nil then rings[2].rank else 0)
+	)
+
+	-- The pads: the two 1V1 pads, one for each seat, a bot pad for every level and a training pad, none overlapping,
+	-- all of them clear of the channel, and the 1V1 pads facing each other across the walkway.
+	do
+		local pads = FoundryLayout.Pads
+		local radius = FoundryLayout.PadRadius
+		local seats: { [number]: FoundryLayout.Pad } = {}
+		local levels: { [number]: boolean } = {}
+		local training = 0
+		local padNames: { [string]: boolean } = {}
+		local padsUnique = true
+		for _, pad in pads do
+			if padNames[pad.name] then
+				padsUnique = false
+			end
+			padNames[pad.name] = true
+			check(`the {pad.name} pad has a label`, pad.label ~= "")
+			if pad.kind == "versus" then
+				seats[pad.seat] = pad
+			elseif pad.kind == "bot" then
+				levels[pad.level] = true
+			else
+				training += 1
+			end
+			-- The glow ring around a pad is 0.35 wider than the pad, and the channel's curbs reach CHANNEL_HALF.
+			local reachSouth = pad.position.Z + radius + 0.35
+			check(
+				`the {pad.name} pad is clear of the channel`,
+				reachSouth < FoundryLayout.ChannelSouth - CHANNEL_HALF
+					and math.abs(pad.position.X) + radius + 0.35 < FoundryLayout.ChannelX - CHANNEL_HALF,
+				round(reachSouth)
+			)
+			check(`the {pad.name} pad is on the hall floor`, pad.position.Y == 0)
+		end
+		check("pad names are unique", padsUnique)
+		check("there is a 1V1 pad for each seat", seats[1] ~= nil and seats[2] ~= nil)
+		check("a bot pad for every level", levels[1] == true and levels[2] == true and levels[3] == true)
+		check("one training pad", training == 1, training)
+		if seats[1] ~= nil and seats[2] ~= nil then
+			local apart = (flat(seats[1].position) - flat(seats[2].position)).Magnitude
+			check("the 1V1 pads stand apart, a walkway between", apart >= 2 * radius + 2, round(apart))
+			check(
+				"the first seat's pad is on the west, like its booth",
+				seats[1].position.X < seats[2].position.X and FoundryLayout.Booths[1].X < FoundryLayout.Booths[2].X
+			)
+		end
+		local overlaps = 0
+		for first = 1, #pads do
+			for second = first + 1, #pads do
+				local apart = (flat(pads[first].position) - flat(pads[second].position)).Magnitude
+				if apart < 2 * (radius + 0.35) + 0.5 then
+					overlaps += 1
+				end
+			end
+		end
+		check("no two pads touch", overlaps == 0, overlaps)
+	end
 
 	for _, spec in rings do
 		local center = flat(spec.center)

@@ -16,6 +16,8 @@ export type MoveFrameData = {
 	onBlock: number,
 	damage: number,
 	chip: number,
+	-- What blocking it takes off the guard bar.
+	guard: number,
 }
 
 export type History = {
@@ -60,6 +62,7 @@ function FrameData.forMove(moveId: number, attacker: FightConfig.Stats?, defende
 		onBlock = FightSim.blockstunFor(move, suffered) - committed,
 		damage = move.damage,
 		chip = FightSim.chipFor(move, suffered),
+		guard = FightSim.guardDamageFor(move, suffered),
 	}
 end
 
@@ -196,6 +199,14 @@ function FrameData.cellKind(state: number, moveId: number, stateFrame: number, m
 			return "active"
 		end
 		return "recovery"
+	elseif state == State.Grab then
+		local throw = FightConfig.Throw
+		if stateFrame <= throw.startup then
+			return "startup"
+		elseif stateFrame <= throw.startup + throw.active then
+			return "active"
+		end
+		return "recovery"
 	elseif state == State.Hitstun then
 		return "hitstun"
 	elseif state == State.Blockstun then
@@ -206,6 +217,10 @@ function FrameData.cellKind(state: number, moveId: number, stateFrame: number, m
 		return "dash"
 	elseif state == State.KO then
 		return "ko"
+	elseif state == State.GuardBreak then
+		return "broken"
+	elseif state == State.Throw or state == State.Thrown or state == State.ThrowBreak then
+		return "throw"
 	end
 	return "idle"
 end
