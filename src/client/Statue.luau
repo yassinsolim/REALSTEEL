@@ -15,6 +15,7 @@ local Loadout = require(Shared:WaitForChild("Loadout"))
 local Looks = require(Shared:WaitForChild("Looks"))
 local RobotSkeleton = require(Shared:WaitForChild("RobotSkeleton"))
 local FighterView = require(script.Parent:WaitForChild("FighterView"))
+local RobotFrames = require(script.Parent:WaitForChild("RobotFrames"))
 local RobotRig = require(script.Parent:WaitForChild("RobotRig"))
 
 export type Statue = {
@@ -60,7 +61,9 @@ function Statue.new(robot: FighterView.Robot, state: Instance): Statue
 	local folder = Instance.new("Folder")
 	folder.Name = "Statue"
 	folder.Parent = Workspace
-	local rig = RobotRig.new(folder, robot.rig, GOLD, robot.template)
+	-- A statue is cast metal, so it is drawn without the worn paint.
+	local stock = RobotFrames.get(robot, nil)
+	local rig = RobotRig.new(folder, stock.rig, GOLD, stock.template)
 	local pose = RobotSkeleton.newPose(robot.rig)
 	local victory = robot.clips.Victory or robot.clips.Idle
 	RobotSkeleton.sample(victory, POSE_AT, pose)
@@ -106,8 +109,12 @@ function Statue.new(robot: FighterView.Robot, state: Instance): Statue
 		local rigKey = `{champion}:{holder ~= nil}:{loadout}:{look}`
 		if rigKey ~= shownRig then
 			shownRig = rigKey
+			local choice = Loadout.decode(loadout)
+			local chosen = Looks.decode(look)
+			local frame = RobotFrames.get(robot, Looks.frameFor(choice, chosen))
+			RobotRig.setFrame(rig, frame.rig, frame.template)
 			RobotRig.setScale(rig, Loadout.scale(loadout))
-			RobotRig.setKits(rig, Looks.kitsFor(Loadout.decode(loadout), Looks.decode(look)))
+			RobotRig.setKits(rig, Looks.kitsFor(choice, chosen))
 			if champion then
 				RobotRig.setPalette(rig, GOLD, GOLD_DEEP)
 				RobotRig.setFinish(rig, Enum.Material.Metal, 0.35)

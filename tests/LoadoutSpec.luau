@@ -658,23 +658,35 @@ return function(): (number, { string })
 			`{odd.armor},{odd.accent},{odd.finish},{odd.crest}`
 		)
 
-		-- Kits.
+		-- Kits and frames.
 		check(
 			"a stock ANVIL with no crest wears nothing extra",
 			#Looks.kitsFor(Loadout.decode(Loadout.DefaultCode), Looks.default()) == 0
 		)
-		check(
-			"kit lists line up with the catalog",
-			#Looks.ChassisKits == #Loadout.Chassis and #Looks.ModuleKits.ARMS == 3
-		)
+		check("every crest but none has a kit", #Looks.CrestKits == #Looks.Crests and Looks.CrestKits[1] == "")
 		local dressed = Looks.kitsFor(
 			{ chassis = BULWARK, arms = PISTON, core = PLATING, legs = 2 },
 			{ armor = 1, accent = 1, finish = 1, crest = 4 }
 		)
 		check(
-			"a loadout and a crest choose the kits",
-			table.concat(dressed, ",") == "Bulwark,PistonFists,Plating,HydraulicBoots,CrestHorns",
+			"only the crest is a kit; the build shows in the frame",
+			table.concat(dressed, ",") == "CrestHorns",
 			table.concat(dressed, ",")
+		)
+		check("every chassis has a frame", #Looks.Frames == #Loadout.Chassis)
+		local distinct: { [string]: boolean } = {}
+		for _, frame in Looks.Frames do
+			distinct[frame] = true
+		end
+		local frameCount = 0
+		for _ in distinct do
+			frameCount += 1
+		end
+		check("each chassis is drawn as a robot of its own", frameCount == #Loadout.Chassis, frameCount)
+		check(
+			"a loadout is drawn as its chassis' frame",
+			Looks.frameFor({ chassis = BULWARK, arms = PISTON, core = PLATING, legs = 2 }, Looks.default()) == "Bulwark"
+				and Looks.frameFor(Loadout.decode(Loadout.DefaultCode), Looks.default()) == "Anvil"
 		)
 
 		-- Colors.

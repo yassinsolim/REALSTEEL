@@ -93,13 +93,9 @@ Looks.Finishes = {
 Looks.Crests = { "NONE", "FIN", "ANTENNA", "HORNS", "HALO" }
 Looks.CrestKits = { "", "CrestFin", "CrestAntenna", "CrestHorns", "CrestHalo" }
 
--- The kit each chassis always wears, and the kit of each module (stock parts have none). RobotKits has them all.
-Looks.ChassisKits = { "", "Bulwark", "Lance", "Razor", "Maul" }
-Looks.ModuleKits = {
-	ARMS = { "", "PistonFists", "ServoWrists" },
-	CORE = { "", "Plating", "ShockDampers" },
-	LEGS = { "", "HydraulicBoots", "SpringGreaves" },
-} :: { [string]: { string } }
+-- The robot each chassis is drawn as, by frame name in RobotRigs. Every frame is built on the same skeleton, so they all
+-- play the same animations.
+Looks.Frames = { "Anvil", "Bulwark", "Lance", "Razor", "Maul" }
 
 -- The distance in RGB below which two colors are too alike to tell fighters apart.
 local ARMOR_CLASH = 70
@@ -165,20 +161,15 @@ function Looks.botLook(seed: number): Look
 	return look
 end
 
--- The kits to draw for a loadout and a look: the chassis' own, the equipped modules', and the crest.
-function Looks.kitsFor(choice: Loadout.Choice, look: Look): { string }
-	local kits: { string } = {}
-	local function add(name: string?)
-		if name ~= nil and name ~= "" then
-			table.insert(kits, name)
-		end
-	end
-	add(Looks.ChassisKits[choice.chassis])
-	add(Looks.ModuleKits.ARMS[choice.arms])
-	add(Looks.ModuleKits.CORE[choice.core])
-	add(Looks.ModuleKits.LEGS[choice.legs])
-	add(Looks.CrestKits[look.crest])
-	return kits
+-- The kits to draw for a loadout and a look: the crest. (A chassis is a frame of its own; see frameFor.)
+function Looks.kitsFor(_choice: Loadout.Choice, look: Look): { string }
+	local crest = Looks.CrestKits[look.crest]
+	return if crest ~= nil and crest ~= "" then { crest } else {}
+end
+
+-- The frame (a robot in RobotRigs) a loadout is drawn as with a look.
+function Looks.frameFor(choice: Loadout.Choice, _look: Look): string
+	return Looks.Frames[choice.chassis] or Looks.Frames[1]
 end
 
 local function distance(a: Rgb, b: Rgb): number

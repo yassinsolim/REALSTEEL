@@ -1,8 +1,9 @@
 --!strict
 
 -- Client-only: builds a robot's anchored parts (the uploaded meshes when available, plain blocks otherwise) and moves
--- them from solved poses. On top of the robot's own parts it can draw a chassis' size, a paint finish and add-on kits
--- (armor, pistons, fins, crests), which are plain Parts. Nothing here feeds back into the simulation.
+-- them from solved poses. On top of the robot's own parts it can draw a chassis' size, a paint finish with worn-metal
+-- textures, and add-on kits (the crests), which are plain Parts. A robot can be swapped for another frame in place.
+-- Nothing here feeds back into the simulation.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
@@ -52,12 +53,20 @@ export type RobotRig = {
 	finishReflectance: number,
 	-- How much of the robot is hidden on this screen alone, from 0 (drawn) to 1 (gone).
 	ghost: number,
+	-- The frame's worn-metal SurfaceAppearances by finish name (see RobotWear), or nil for plain colored parts; the name of
+	-- the finish worn, and each textured part's appearance (nil for parts drawn plain, like glows).
+	wear: { [string]: SurfaceAppearance }?,
+	finishName: string,
+	appearances: { [BasePart]: SurfaceAppearance? },
 }
 
 local RobotRig = {}
 
 local FLASH_STRENGTH = 0.7
 local CYLINDER_TURN = CFrame.Angles(0, 0, math.rad(90))
+-- The roles drawn with the worn-metal textures; Armor and Trim are tinted with the paint, the others are not.
+local TEXTURED = { Armor = true, Trim = true, Dark = true, Steel = true }
+local UNTINTED = Color3.new(1, 1, 1)
 
 local function roleColor(def: RobotSkeleton.RoleDef, role: string, accent: Color3, armor: Color3?): Color3
 	if role == "Armor" and armor ~= nil then
@@ -78,6 +87,15 @@ local function paint(self: RobotRig, part: BasePart, role: string)
 	if self.flash ~= nil and (role == "Armor" or role == "Trim") then
 		color = color:Lerp(self.flash, FLASH_STRENGTH)
 	end
+	local appearance = self.appearances[part]
+	if appearance ~= nil then
+		-- The textures carry the material; the paint tints where the map's alpha says paint is (see RobotWear).
+		appearance.Color = if role == "Armor" or role == "Trim" then color else UNTINTED
+		part.Color = color
+		part.Material = Enum.Material.Metal
+		part.Reflectance = 0
+		return
+	end
 	part.Color = color
 	if self.finishMaterial ~= nil and (role == "Armor" or role == "Trim") then
 		part.Material = self.finishMaterial
@@ -85,6 +103,25 @@ local function paint(self: RobotRig, part: BasePart, role: string)
 	else
 		part.Material = def.material
 		part.Reflectance = 0
+	end
+end
+
+-- Puts the worn-metal textures of the current finish on every textured part, or takes them off when the frame has none.
+local function applyWear(self: RobotRig)
+	local wear = self.wear
+	local source = if wear ~= nil then wear[self.finishName] or wear.BRUSHED else nil
+	for index, part in self.parts do
+		local old = self.appearances[part]
+		local wanted = source ~= nil and self.usesMeshes and TEXTURED[self.roles[index]] == true
+		if old ~= nil and (not wanted or old.Name ~= (source :: SurfaceAppearance).Name) then
+			old:Destroy()
+			self.appearances[part] = nil
+		end
+		if wanted and self.appearances[part] == nil then
+			local appearance = (source :: SurfaceAppearance):Clone()
+			appearance.Parent = part
+			self.appearances[part] = appearance
+		end
 	end
 end
 
@@ -115,11 +152,9 @@ local function applyScale(self: RobotRig)
 	end
 end
 
--- Builds the parts under `parent`. `template` holds the imported MeshParts by name, or is nil for a blockout robot.
-function RobotRig.new(parent: Instance, rig: RobotSkeleton.Rig, accent: Color3, template: Instance?): RobotRig
-	local folder = Instance.new("Folder")
-	folder.Name = "Robot"
-
+-- (Re)builds the robot's own parts for a frame: the imported meshes where the template has them, blocks otherwise. Kit
+-- pieces are left alone; they ride on the shared skeleton's joints, which every frame has.
+local function buildParts(self: RobotRig, rig: RobotSkeleton.Rig, template: Instance?)
 	local meshes: { [string]: MeshPart? } = {}
 	if template ~= nil then
 		for _, descendant in template:GetDescendants() do
@@ -162,37 +197,92 @@ function RobotRig.new(parent: Instance, rig: RobotSkeleton.Rig, accent: Color3, 
 		part.CanQuery = false
 		part.CanTouch = false
 		part.Material = rig.def.roles[def.role].material
-		part.Parent = folder
+		part.LocalTransparencyModifier = self.ghost
+		part.Parent = self.folder
 		parts[index] = part
 		roles[index] = def.role
 		baseSizes[index] = part.Size
 	end
-	folder.Parent = parent
 
+	self.rig = rig
+	self.parts = parts
+	self.correction = correction
+	self.roles = roles
+	self.baseSizes = baseSizes
+	self.scaledCorrection = table.clone(correction)
+	self.usesMeshes = usesMeshes
+	table.clear(self.appearances)
+	local all = table.clone(parts)
+	for _, kit in self.kitParts do
+		table.insert(all, kit.part)
+	end
+	self.allParts = all
+	self.frames = table.create(#all, CFrame.identity)
+	applyWear(self)
+end
+
+-- Builds the parts under `parent`. `template` holds the imported MeshParts by name, or is nil for a blockout robot.
+-- `wear` holds the frame's worn-metal SurfaceAppearances by finish name, if it has them.
+function RobotRig.new(
+	parent: Instance,
+	rig: RobotSkeleton.Rig,
+	accent: Color3,
+	template: Instance?,
+	wear: { [string]: SurfaceAppearance }?
+): RobotRig
+	local folder = Instance.new("Folder")
+	folder.Name = "Robot"
 	local self: RobotRig = {
 		rig = rig,
 		folder = folder,
-		parts = parts,
-		correction = correction,
-		roles = roles,
+		parts = {},
+		correction = {},
+		roles = {},
 		accent = accent,
 		armor = nil,
 		flash = nil,
 		joints = table.create(rig.jointCount, CFrame.identity),
-		frames = table.create(#parts, CFrame.identity),
-		usesMeshes = usesMeshes,
+		frames = {},
+		usesMeshes = false,
 		scale = 1,
-		baseSizes = baseSizes,
-		scaledCorrection = table.clone(correction),
+		baseSizes = {},
+		scaledCorrection = {},
 		kitParts = {},
 		kitKey = "",
-		allParts = table.clone(parts),
+		allParts = {},
 		finishMaterial = nil,
 		finishReflectance = 0,
 		ghost = 0,
+		wear = wear,
+		finishName = "",
+		appearances = {},
 	}
+	buildParts(self, rig, template)
+	folder.Parent = parent
 	applyColors(self)
 	return self
+end
+
+-- Swaps the robot for another frame on the same skeleton (another chassis' robot), keeping its size, kits, paint, finish
+-- and fade. Asking for the frame it already is does nothing. Returns whether it rebuilt the robot's parts: anything
+-- fastened to the old parts (strike trails) is gone, and the new parts stand at the template's pose until the next place.
+function RobotRig.setFrame(
+	self: RobotRig,
+	rig: RobotSkeleton.Rig,
+	template: Instance?,
+	wear: { [string]: SurfaceAppearance }?
+): boolean
+	if rig == self.rig then
+		return false
+	end
+	for _, part in self.parts do
+		part:Destroy()
+	end
+	self.wear = wear
+	buildParts(self, rig, template)
+	applyScale(self)
+	applyColors(self)
+	return true
 end
 
 -- Changes the team color and the armor color (nil keeps the rig's own).
@@ -204,11 +294,15 @@ function RobotRig.setPalette(self: RobotRig, accent: Color3, armor: Color3?)
 	end
 end
 
--- The material and reflectance of the armor and trim (a paint finish), or nil for the rig's own.
-function RobotRig.setFinish(self: RobotRig, material: Enum.Material?, reflectance: number)
-	if material ~= self.finishMaterial or reflectance ~= self.finishReflectance then
+-- The material and reflectance of the armor and trim (a paint finish), or nil for the rig's own. `name` is the finish's
+-- name in Looks.Finishes, which picks the worn-metal textures for a frame that has them.
+function RobotRig.setFinish(self: RobotRig, material: Enum.Material?, reflectance: number, name: string?)
+	local finishName = name or ""
+	if material ~= self.finishMaterial or reflectance ~= self.finishReflectance or finishName ~= self.finishName then
 		self.finishMaterial = material
 		self.finishReflectance = reflectance
+		self.finishName = finishName
+		applyWear(self)
 		applyColors(self)
 	end
 end

@@ -105,17 +105,36 @@ local function buildTrail(part: BasePart, accent: Color3): Trail
 	return trail
 end
 
+-- Builds the strike trails on one robot, replacing any it had. Call again whenever the robot's parts are rebuilt (a frame
+-- swap), since the trails are fastened to them.
+function Effects.attachSlot(self: Effects, slot: number, view: FighterView.View, accent: Color3)
+	local set: { [string]: Trail } = {}
+	for _, striker in STRIKERS do
+		local part = view.robot.folder:FindFirstChild(striker .. "_Armor")
+		if part ~= nil and part:IsA("BasePart") then
+			set[striker] = buildTrail(part, accent)
+		end
+	end
+	local old = self.trails[slot]
+	if old ~= nil then
+		for _, trail in old do
+			local top, bottom = trail.Attachment0, trail.Attachment1
+			trail:Destroy()
+			if top ~= nil then
+				top:Destroy()
+			end
+			if bottom ~= nil then
+				bottom:Destroy()
+			end
+		end
+	end
+	self.trails[slot] = set
+end
+
 -- Builds the strike trails on both robots. Call once the robots exist; `accents` follow the team colors.
 function Effects.attach(self: Effects, views: { FighterView.View }, accents: { Color3 })
 	for slot, view in views do
-		local set: { [string]: Trail } = {}
-		for _, striker in STRIKERS do
-			local part = view.robot.folder:FindFirstChild(striker .. "_Armor")
-			if part ~= nil and part:IsA("BasePart") then
-				set[striker] = buildTrail(part, accents[slot])
-			end
-		end
-		self.trails[slot] = set
+		Effects.attachSlot(self, slot, view, accents[slot])
 	end
 end
 

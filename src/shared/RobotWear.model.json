@@ -1,0 +1,255 @@
+{
+  "className": "Folder",
+  "children": [
+    {
+      "name": "Anvil",
+      "className": "Folder",
+      "children": [
+        {
+          "name": "BRUSHED",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://104390661482507",
+            "NormalMap": "rbxassetid://120288135431652",
+            "MetalnessMap": "rbxassetid://134417474598600",
+            "RoughnessMap": "rbxassetid://100222289382137"
+          }
+        },
+        {
+          "name": "MATTE",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://104390661482507",
+            "NormalMap": "rbxassetid://120288135431652",
+            "MetalnessMap": "rbxassetid://122820598836990",
+            "RoughnessMap": "rbxassetid://77540957449882"
+          }
+        },
+        {
+          "name": "CHROME",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://104390661482507",
+            "NormalMap": "rbxassetid://120288135431652",
+            "MetalnessMap": "rbxassetid://123668894581646",
+            "RoughnessMap": "rbxassetid://76306432634773"
+          }
+        },
+        {
+          "name": "GLOSS",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://104390661482507",
+            "NormalMap": "rbxassetid://120288135431652",
+            "MetalnessMap": "rbxassetid://106380692685014",
+            "RoughnessMap": "rbxassetid://105698253919673"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Bulwark",
+      "className": "Folder",
+      "children": [
+        {
+          "name": "BRUSHED",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://85350832693574",
+            "NormalMap": "rbxassetid://102305211007573",
+            "MetalnessMap": "rbxassetid://113310448890979",
+            "RoughnessMap": "rbxassetid://95808187682704"
+          }
+        },
+        {
+          "name": "MATTE",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://85350832693574",
+            "NormalMap": "rbxassetid://102305211007573",
+            "MetalnessMap": "rbxassetid://123553977929047",
+            "RoughnessMap": "rbxassetid://86246152217412"
+          }
+        },
+        {
+          "name": "CHROME",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://85350832693574",
+            "NormalMap": "rbxassetid://102305211007573",
+            "MetalnessMap": "rbxassetid://100887883696465",
+            "RoughnessMap": "rbxassetid://91907711721577"
+          }
+        },
+        {
+          "name": "GLOSS",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://85350832693574",
+            "NormalMap": "rbxassetid://102305211007573",
+            "MetalnessMap": "rbxassetid://137386843064055",
+            "RoughnessMap": "rbxassetid://112838641170929"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Lance",
+      "className": "Folder",
+      "children": [
+        {
+          "name": "BRUSHED",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://121293031422364",
+            "NormalMap": "rbxassetid://82069561315710",
+            "MetalnessMap": "rbxassetid://112652677678650",
+            "RoughnessMap": "rbxassetid://124350087635701"
+          }
+        },
+        {
+          "name": "MATTE",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://121293031422364",
+            "NormalMap": "rbxassetid://82069561315710",
+            "MetalnessMap": "rbxassetid://123305862457454",
+            "RoughnessMap": "rbxassetid://131341360748289"
+          }
+        },
+        {
+          "name": "CHROME",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://121293031422364",
+            "NormalMap": "rbxassetid://82069561315710",
+            "MetalnessMap": "rbxassetid://74713596049450",
+            "RoughnessMap": "rbxassetid://125284396805637"
+          }
+        },
+        {
+          "name": "GLOSS",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://121293031422364",
+            "NormalMap": "rbxassetid://82069561315710",
+            "MetalnessMap": "rbxassetid://111488031715266",
+            "RoughnessMap": "rbxassetid://103746565007447"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Razor",
+      "className": "Folder",
+      "children": [
+        {
+          "name": "BRUSHED",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://111263164689378",
+            "NormalMap": "rbxassetid://80193299316715",
+            "MetalnessMap": "rbxassetid://137093352959754",
+            "RoughnessMap": "rbxassetid://103221210951799"
+          }
+        },
+        {
+          "name": "MATTE",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://111263164689378",
+            "NormalMap": "rbxassetid://80193299316715",
+            "MetalnessMap": "rbxassetid://135298957792514",
+            "RoughnessMap": "rbxassetid://135843136601040"
+          }
+        },
+        {
+          "name": "CHROME",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://111263164689378",
+            "NormalMap": "rbxassetid://80193299316715",
+            "MetalnessMap": "rbxassetid://124045574205232",
+            "RoughnessMap": "rbxassetid://83112350014597"
+          }
+        },
+        {
+          "name": "GLOSS",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://111263164689378",
+            "NormalMap": "rbxassetid://80193299316715",
+            "MetalnessMap": "rbxassetid://136151702684115",
+            "RoughnessMap": "rbxassetid://137688058717225"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Maul",
+      "className": "Folder",
+      "children": [
+        {
+          "name": "BRUSHED",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://118438524420770",
+            "NormalMap": "rbxassetid://103310107288085",
+            "MetalnessMap": "rbxassetid://133006718041003",
+            "RoughnessMap": "rbxassetid://96768866810062"
+          }
+        },
+        {
+          "name": "MATTE",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://118438524420770",
+            "NormalMap": "rbxassetid://103310107288085",
+            "MetalnessMap": "rbxassetid://76887476559493",
+            "RoughnessMap": "rbxassetid://130167830609107"
+          }
+        },
+        {
+          "name": "CHROME",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://118438524420770",
+            "NormalMap": "rbxassetid://103310107288085",
+            "MetalnessMap": "rbxassetid://120635424987154",
+            "RoughnessMap": "rbxassetid://123590705273365"
+          }
+        },
+        {
+          "name": "GLOSS",
+          "className": "SurfaceAppearance",
+          "properties": {
+            "AlphaMode": "TintMask",
+            "ColorMap": "rbxassetid://118438524420770",
+            "NormalMap": "rbxassetid://103310107288085",
+            "MetalnessMap": "rbxassetid://106999701961320",
+            "RoughnessMap": "rbxassetid://109018102030953"
+          }
+        }
+      ]
+    }
+  ]
+}

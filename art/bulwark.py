@@ -110,12 +110,12 @@ def arm(robot, side, sign):
     pauldron, tilt = (1.72 * sign, 5.48, 0.0), (0, 0, -16 * sign)
     step, step_tilt = (1.98 * sign, 5.1, 0.0), (0, 0, -30 * sign)
     armor.box(pauldron, (1.2, 0.62, 1.4), bevel=0.22, segments=3, rot=tilt)
-    armor.box(place(pauldron, tilt, (0.08, 0.34, 0)), (0.26, 0.14, 1.22), bevel=0.06, rot=tilt)
+    armor.box(place(pauldron, tilt, (0.08 * sign, 0.34, 0)), (0.26, 0.14, 1.22), bevel=0.06, rot=tilt)
     armor.box(step, (0.82, 0.36, 1.26), bevel=0.12, segments=3, rot=step_tilt)
     armor.box((1.5 * sign, 4.5, -0.3), (0.5, 0.62, 0.16), bevel=0.06)
     robot.part(upper, "Trim").box(place(step, step_tilt, (0.42 * sign, 0, 0)), (0.07, 0.3, 1.3), bevel=0.02, rot=step_tilt)
     steel = robot.part(upper, "Steel")
-    rivets(steel, place(pauldron, tilt, (-0.4, 0.31, -0.5)), place(pauldron, tilt, (-0.4, 0.31, 0.5)), 4, (0, 1, 0))
+    rivets(steel, place(pauldron, tilt, (-0.4 * sign, 0.31, -0.5)), place(pauldron, tilt, (-0.4 * sign, 0.31, 0.5)), 4, (0, 1, 0))
     piston(dark, steel, (1.5 * sign, 4.9, 0.4), (1.54 * sign, 4.15, 0.42), 0.08)
 
     fore = "Forearm" + side

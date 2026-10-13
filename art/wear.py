@@ -1,9 +1,11 @@
 """Worn-metal textures for the robot frames.
 
-Every textured part of a frame shares one UV atlas. Cycles bakes raw signals into it: how sharp each convex edge is, how
-deep each seam is, two noise layers and the height above the floor, joint by joint so a hanging arm never stains the
-torso. A beveled-edge normal map is baked too. numpy then turns the signals into the maps the game puts on the parts with
-SurfaceAppearance:
+Every textured part of a frame shares one UV atlas. Cycles bakes raw signals into it: how sharp each convex edge is and
+the band along it, how deep each seam is, noise layers, scratches, the height above the floor and how exposed each joint
+is (fists and feet take the most knocks), joint by joint so a hanging arm never stains the torso. A beveled-edge normal
+map is baked too. numpy then turns the signals into the maps the game puts on the parts with SurfaceAppearance. The wear
+is meant to read from a fighting camera: paint that holds on the panels, worn through along the edges and chipped where
+the edges take hits, darker steel showing through, and grime in the seams.
 
   <Frame>_color.png   albedo in sRGB, alpha the paint (AlphaMode TintMask: each player's paint tints only where alpha is
                       1, so worn edges show bare steel whatever the paint)
@@ -28,15 +30,40 @@ SIZE = 1024
 # Paint metalness and roughness for each finish; keep the names in step with Looks.Finishes.
 FINISHES = {"BRUSHED": (0.7, 0.36), "MATTE": (0.04, 0.78), "CHROME": (0.95, 0.07), "GLOSS": (0.1, 0.16)}
 
-# Albedo of each surface in sRGB (paint is near white, so the player's paint tints it to its own color).
+# Albedo of each surface in sRGB (paint is near white, so the player's paint tints it to its own color). Bare steel is kept
+# dark, a little rough and not fully metallic, so a chip reads on light paint and does not glare on dark paint.
 PAINT = 0.93
-BARE_STEEL = 0.7
-STEEL = 0.74
+BARE_STEEL = 0.4
+BARE_METAL = 0.85
+BARE_ROUGH = 0.5
+STEEL = 0.68
 DARK = (0.11, 0.115, 0.13)
+# How much a scratch roughens the paint.
+SCRATCH = 0.25
+
+# How much wear each joint takes, by the start of its name: the fists and feet the most, the core the least.
+EXPOSURE = (
+    ("Hand", 1.0),
+    ("Foot", 0.8),
+    ("Forearm", 0.75),
+    ("Shin", 0.6),
+    ("UpperArm", 0.5),
+    ("Head", 0.45),
+    ("Chest", 0.45),
+    ("Thigh", 0.4),
+    ("Pelvis", 0.35),
+)
 
 
 def textured(robot):
     return [part for part in robot.parts if part.role in ROLE_ID]
+
+
+def exposure(joint):
+    for prefix, amount in EXPOSURE:
+        if joint.startswith(prefix):
+            return amount
+    return 0.4
 
 
 def unwrap(robot):
@@ -109,24 +136,27 @@ def _emit_material(name, image, build):
 
 def _edges(tree):
     """R: how far the surface turns within a bevel's reach (one minus the dot product of a rounded and the flat normal),
-    high along every edge and nought on flat faces, whatever other geometry is near."""
-    bevel = _node(tree, "ShaderNodeBevel", (0, 200), samples=12)
-    bevel.inputs["Radius"].default_value = 0.05
+    high along every edge and nought on flat faces, whatever other geometry is near. G: the same over a wider reach, the
+    band along each edge where paint chips."""
     geometry = _node(tree, "ShaderNodeNewGeometry", (0, 0))
-    dot = _node(tree, "ShaderNodeVectorMath", (200, 100), operation="DOT_PRODUCT")
-    tree.links.new(bevel.outputs["Normal"], dot.inputs[0])
-    tree.links.new(geometry.outputs["True Normal"], dot.inputs[1])
-    turn = _node(tree, "ShaderNodeMath", (400, 100), operation="SUBTRACT")
-    turn.inputs[0].default_value = 1.0
-    tree.links.new(dot.outputs["Value"], turn.inputs[1])
     combine = _node(tree, "ShaderNodeCombineColor", (600, 0))
-    tree.links.new(turn.outputs[0], combine.inputs["Red"])
+    for row, (radius, channel) in enumerate(((0.05, "Red"), (0.16, "Green"))):
+        bevel = _node(tree, "ShaderNodeBevel", (0, 200 + 300 * row), samples=12)
+        bevel.inputs["Radius"].default_value = radius
+        dot = _node(tree, "ShaderNodeVectorMath", (200, 100 + 300 * row), operation="DOT_PRODUCT")
+        tree.links.new(bevel.outputs["Normal"], dot.inputs[0])
+        tree.links.new(geometry.outputs["True Normal"], dot.inputs[1])
+        turn = _node(tree, "ShaderNodeMath", (400, 100 + 300 * row), operation="SUBTRACT")
+        turn.inputs[0].default_value = 1.0
+        tree.links.new(dot.outputs["Value"], turn.inputs[1])
+        tree.links.new(turn.outputs[0], combine.inputs[channel])
     return combine.outputs["Color"]
 
 
 def _signals(tree):
-    """G: seams (occlusion from outside). B: coarse noise."""
-    outside = _node(tree, "ShaderNodeAmbientOcclusion", (0, 0), samples=16)
+    """G: seams (occlusion from outside, by the frame's own parts only, so robots left in the scene by an earlier bake
+    never stain it). B: coarse noise."""
+    outside = _node(tree, "ShaderNodeAmbientOcclusion", (0, 0), samples=16, only_local=True)
     outside.inputs["Distance"].default_value = 0.35
     seam = _node(tree, "ShaderNodeMath", (200, 0), operation="SUBTRACT")
     seam.inputs[0].default_value = 1.0
@@ -144,7 +174,7 @@ def _signals(tree):
 
 
 def _details(tree):
-    """R: scratches, thin wavy streaks broken into short runs. G: large grime blotches."""
+    """R: scratches, thin wavy streaks broken into short runs. G: large grime blotches. B: how exposed the joint is."""
     coords = _node(tree, "ShaderNodeTexCoord", (-600, 0))
     stretch = _node(tree, "ShaderNodeMapping", (-400, 0))
     stretch.inputs["Scale"].default_value = (1.0, 1.0, 1.0)
@@ -156,7 +186,7 @@ def _details(tree):
     wave.inputs["Detail"].default_value = 3.0
     tree.links.new(stretch.outputs["Vector"], wave.inputs["Vector"])
     lines = _node(tree, "ShaderNodeMapRange", (100, 200))
-    lines.inputs["From Min"].default_value = 0.94
+    lines.inputs["From Min"].default_value = 0.955
     lines.inputs["From Max"].default_value = 0.985
     tree.links.new(wave.outputs["Fac"], lines.inputs["Value"])
     runs = _node(tree, "ShaderNodeTexNoise", (-150, -50))
@@ -164,8 +194,8 @@ def _details(tree):
     runs.inputs["Detail"].default_value = 3.0
     tree.links.new(coords.outputs["Object"], runs.inputs["Vector"])
     gate = _node(tree, "ShaderNodeMapRange", (100, -50))
-    gate.inputs["From Min"].default_value = 0.52
-    gate.inputs["From Max"].default_value = 0.66
+    gate.inputs["From Min"].default_value = 0.58
+    gate.inputs["From Max"].default_value = 0.68
     tree.links.new(runs.outputs["Fac"], gate.inputs["Value"])
     scratches = _node(tree, "ShaderNodeMath", (300, 100), operation="MULTIPLY")
     tree.links.new(lines.outputs["Result"], scratches.inputs[0])
@@ -175,14 +205,16 @@ def _details(tree):
     blotch.inputs["Detail"].default_value = 6.0
     blotch.inputs["Roughness"].default_value = 0.7
     tree.links.new(coords.outputs["Object"], blotch.inputs["Vector"])
+    exposed = _node(tree, "ShaderNodeAttribute", (300, -300), attribute_type="GEOMETRY", attribute_name="wear_exposure")
     combine = _node(tree, "ShaderNodeCombineColor", (500, 0))
     tree.links.new(scratches.outputs[0], combine.inputs["Red"])
     tree.links.new(blotch.outputs["Fac"], combine.inputs["Green"])
+    tree.links.new(exposed.outputs["Fac"], combine.inputs["Blue"])
     return combine.outputs["Color"]
 
 
 def _ids(tree):
-    """R: the part's role number / 4. G: height above the floor / 8 studs (rest pose). B: fine noise for chips."""
+    """R: the part's role number / 4. G: height above the floor / 8 studs (rest pose). B: chip-sized noise."""
     role = _node(tree, "ShaderNodeAttribute", (0, 200), attribute_type="GEOMETRY", attribute_name="wear_role")
     quarter = _node(tree, "ShaderNodeMath", (200, 200), operation="DIVIDE")
     tree.links.new(role.outputs["Fac"], quarter.inputs[0])
@@ -194,15 +226,15 @@ def _ids(tree):
     tree.links.new(split.outputs["Z"], height.inputs[0])
     height.inputs[1].default_value = 8.0
     coords = _node(tree, "ShaderNodeTexCoord", (-400, -200))
-    fine = _node(tree, "ShaderNodeTexNoise", (0, -200))
-    fine.inputs["Scale"].default_value = 26.0
-    fine.inputs["Detail"].default_value = 4.0
-    fine.inputs["Roughness"].default_value = 0.5
-    tree.links.new(coords.outputs["Object"], fine.inputs["Vector"])
+    chip = _node(tree, "ShaderNodeTexNoise", (0, -200))
+    chip.inputs["Scale"].default_value = 5.0
+    chip.inputs["Detail"].default_value = 3.0
+    chip.inputs["Roughness"].default_value = 0.55
+    tree.links.new(coords.outputs["Object"], chip.inputs["Vector"])
     combine = _node(tree, "ShaderNodeCombineColor", (450, 0))
     tree.links.new(quarter.outputs[0], combine.inputs["Red"])
     tree.links.new(height.outputs[0], combine.inputs["Green"])
-    tree.links.new(fine.outputs["Fac"], combine.inputs["Blue"])
+    tree.links.new(chip.outputs["Fac"], combine.inputs["Blue"])
     return combine.outputs["Color"]
 
 
@@ -247,8 +279,9 @@ def _pixels(image):
 
 
 def _joined(parts, shift):
-    """One object made of copies of the parts, each moved `shift(part)` studs along x and with its role on every face, so
-    a whole frame bakes in one Cycles session instead of one per part. Copies keep the parts' UVs and normals."""
+    """One object made of copies of the parts, each moved `shift(part)` studs along x and with its role and its joint's
+    exposure on every face, so a whole frame bakes in one Cycles session instead of one per part. Copies keep the parts'
+    UVs and normals."""
     copies = []
     for part in parts:
         obj = part.obj.copy()
@@ -256,8 +289,11 @@ def _joined(parts, shift):
         obj.hide_render = False
         bpy.context.scene.collection.objects.link(obj)
         obj.location.x += shift(part)
+        faces = len(obj.data.polygons)
         role = obj.data.attributes.new("wear_role", "FLOAT", "FACE")
-        role.data.foreach_set("value", [float(ROLE_ID[part.role])] * len(obj.data.polygons))
+        role.data.foreach_set("value", [float(ROLE_ID[part.role])] * faces)
+        exposed = obj.data.attributes.new("wear_exposure", "FLOAT", "FACE")
+        exposed.data.foreach_set("value", [exposure(part.joint)] * faces)
         copies.append(obj)
     for obj in bpy.context.view_layer.objects:
         obj.select_set(False)
@@ -277,7 +313,8 @@ def _discard(obj):
 
 
 def bake(robot):
-    """Bakes the raw signals and the normal map at BAKE_SIZE. Returns (signals, ids, normal) as float arrays."""
+    """Bakes the raw signals and the normal map at BAKE_SIZE. Returns {signal: float array}: "normal" (HxWx4) and the
+    single channels "edge", "near", "seam", "noise", "role", "height", "chip", "scratch", "blotch" and "exposure"."""
     _cycles()
     parts = textured(robot)
     scratch = _image(robot.name + "_scratch", BAKE_SIZE)
@@ -311,14 +348,22 @@ def bake(robot):
     ids = bake_into(apart, _emit_material("WearIds", scratch, _ids))
     details = bake_into(apart, _emit_material("WearDetails", scratch, _details))
     _discard(apart)
-    signals[..., 0] = edges[..., 0]
-    # Scratches and blotches ride along in the spare alpha channels.
-    signals[..., 3] = details[..., 0]
-    ids[..., 3] = details[..., 1]
 
     for part in robot.parts:
         part.obj.hide_render = False
-    return signals, ids, normal
+    return {
+        "normal": normal,
+        "edge": edges[..., 0],
+        "near": edges[..., 1],
+        "seam": signals[..., 1],
+        "noise": signals[..., 2],
+        "role": ids[..., 0],
+        "height": ids[..., 1],
+        "chip": ids[..., 2],
+        "scratch": details[..., 0],
+        "blotch": details[..., 1],
+        "exposure": details[..., 2],
+    }
 
 
 def _smooth(low, high, value):
@@ -332,48 +377,75 @@ def _half(array):
     return array.reshape(height // 2, 2, width // 2, 2, *array.shape[2:]).mean(axis=(1, 3))
 
 
-def compose(signals, ids, normal):
+def _quantiles(values, mask, levels):
+    return np.quantile(values[mask], levels) if mask.any() else np.ones(len(levels))
+
+
+def _ranked(values, groups, mask, low, high):
+    """values eased from 0 at their `low` quantile to 1 at their `high` quantile, measured within each group of mask."""
+    ranked = np.zeros_like(values)
+    for group in np.unique(groups[mask]):
+        members = groups == group
+        floor, top = _quantiles(values, mask & members, (low, high))
+        ranked = np.where(members, _smooth(floor, max(top, floor + 1e-4), values), ranked)
+    return ranked
+
+
+def compose(baked):
     """The game's maps from the baked signals: {name: (array HxWx4 at SIZE, color space)}."""
-    edge_raw, seam_raw, noise, scratch = signals[..., 0], signals[..., 1], signals[..., 2], signals[..., 3]
-    role = np.rint(ids[..., 0] * 4).astype(np.int32)
-    height = ids[..., 1] * 8.0
-    fine = ids[..., 2]
-    blotch = ids[..., 3]
-
-    edge = _smooth(0.012, 0.08, edge_raw)
-    seam = _smooth(0.08, 0.7, seam_raw)
-    # Paint wears off the edges, broken up by noise, chips off here and there, and is scratched through in places.
-    breakup = _smooth(0.36, 0.6, noise + 0.12 * (fine - 0.5))
-    chips = _smooth(0.74, 0.8, fine) * _smooth(0.45, 0.7, noise)
-    wear = np.clip(edge * (0.45 + 0.9 * breakup) * (1.0 - 0.7 * seam) + 0.75 * chips + 0.85 * scratch, 0.0, 1.0)
-    # Dirt rises from the floor, strongest at the feet and gone by the knees; grime gathers in the seams and in blotches.
-    dirt = np.clip(1.0 - height / 1.8, 0.0, 1.0) ** 1.6 * (0.55 + 0.45 * noise)
-    stains = _smooth(0.55, 0.75, blotch) * 0.35
-    grime = np.clip(0.6 * seam + 0.45 * dirt + stains, 0.0, 1.0)
-
+    role = np.rint(baked["role"] * 4).astype(np.int32)
     painted = np.isin(role, PAINTED)
     is_dark = role == 3
     is_steel = role == 4
+    noise, chip, exposed = baked["noise"], baked["chip"], baked["exposure"]
+    height = baked["height"] * 8.0
+    seam = _smooth(0.08, 0.7, baked["seam"])
+    # Edges are ranked within each kind of joint: rounded bevels turn a little almost everywhere and a rounded fist turns
+    # less than a slab of a forearm, so "an edge" is the sharpest few percent of a joint's paint and "near an edge" the
+    # band around them.
+    joints = np.rint(exposed * 100.0)
+    edge = _ranked(baked["edge"], joints, painted, 0.86, 0.97)
+    near = _ranked(baked["near"], joints, painted, 0.55, 0.82)
+    # The chip noise as a grain: 0 at its median and 1 at its 98th percentile.
+    chip_middle, chip_top = _quantiles(chip, painted, (0.5, 0.98))
+    grain = (chip - chip_middle) / max(chip_top - chip_middle, 1e-4)
 
-    paint = PAINT * (1.0 - 0.55 * grime)
-    bare = BARE_STEEL * (1.0 - 0.4 * grime) * (0.88 + 0.24 * fine)
+    # Paint wears off in a zone along the edges, patchy along their length, widest on the fists and feet; within the zone
+    # it chips away raggedly, all but gone right on the edge where the zone is strongest. A flat panel keeps its paint,
+    # and deep seams are sheltered. Wear is all or nothing: TintMask blends the paint toward the near-white map wherever
+    # alpha falls short of 1, so a half-worn scuff on dark paint would show as a pale streak.
+    breakup = _smooth(0.4, 0.62, noise)
+    sheltered = 1.0 - 0.85 * _smooth(0.45, 0.85, baked["seam"])
+    reach = 0.35 + 0.65 * exposed
+    zone = np.maximum(near * breakup * reach, edge * breakup * (0.5 + 0.5 * exposed)) * sheltered
+    wear = _smooth(-0.08, 0.04, grain - (1.5 - 1.9 * zone))
+    # Scratches only scuff the paint's sheen.
+    scuffs = baked["scratch"] * (0.3 + 0.7 * exposed)
+    # Dirt rises from the floor, strongest at the feet and gone by the knees; grime gathers in the seams and in faint
+    # blotches.
+    dirt = np.clip(1.0 - height / 1.8, 0.0, 1.0) ** 1.6 * (0.55 + 0.45 * noise)
+    stains = _smooth(0.55, 0.75, baked["blotch"]) * 0.15
+    grime = np.clip(0.7 * seam + 0.45 * dirt + stains, 0.0, 1.0)
+
+    paint = PAINT * (1.0 - 0.5 * grime)
+    bare = BARE_STEEL * (1.0 - 0.4 * grime) * (0.85 + 0.3 * chip)
     gray = np.where(painted, paint * (1.0 - wear) + bare * wear, 0.0)
-    gray = np.where(is_steel, STEEL * (1.0 - 0.45 * grime) * (0.9 + 0.2 * fine), gray)
+    gray = np.where(is_steel, STEEL * (1.0 - 0.45 * grime) * (0.9 + 0.2 * chip), gray)
     color = np.repeat(gray[..., None], 3, axis=2)
     for channel in range(3):
         lift = DARK[channel] + 0.09 * edge * breakup
         color[..., channel] = np.where(is_dark, lift * (1.0 - 0.45 * grime), color[..., channel])
     alpha = np.where(painted, 1.0 - wear, 0.0)
 
-    maps = {"color": (np.dstack([color, alpha]), "sRGB"), "normal": (normal, "Non-Color")}
+    maps = {"color": (np.dstack([color, alpha]), "sRGB"), "normal": (baked["normal"], "Non-Color")}
     for finish, (paint_metal, paint_rough) in FINISHES.items():
-        metal = np.where(painted, paint_metal * (1.0 - wear) + 1.0 * wear, 0.0)
+        metal = np.where(painted, paint_metal * (1.0 - wear) + BARE_METAL * wear, 0.0)
         metal = np.where(is_dark, 0.5, metal)
         metal = np.where(is_steel, 0.95, metal)
-        rough = np.where(painted, paint_rough * (1.0 - wear) + 0.3 * wear, 0.0)
-        rough = rough + np.where(painted, 0.28 * grime, 0.0)
+        rough = np.where(painted, paint_rough * (1.0 - wear) + BARE_ROUGH * wear, 0.0)
+        rough = rough + np.where(painted, 0.28 * grime + SCRATCH * scuffs, 0.0)
         rough = np.where(is_dark, 0.58 + 0.25 * grime, rough)
-        rough = np.where(is_steel, 0.26 + 0.25 * grime + 0.12 * fine, rough)
+        rough = np.where(is_steel, 0.3 + 0.25 * grime + 0.1 * chip, rough)
         rough = np.clip(rough, 0.03, 1.0)
         ones = np.ones_like(metal)
         maps["metal_" + finish] = (np.dstack([metal, metal, metal, ones]), "Non-Color")

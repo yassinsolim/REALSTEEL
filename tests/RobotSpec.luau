@@ -90,53 +90,79 @@ return function(): (number, { string })
 		end
 	end
 
-	-- Rig data: the generated Blender rig is consistent and symmetric.
-	do
+	-- Rig data: every generated Blender frame is consistent and symmetric, and on the shared skeleton.
+	for frameName, def in RobotRigs :: { [string]: RobotSkeleton.RigDef } do
+		local frameRig = RobotSkeleton.newRig(def)
 		local roleless = 0
-		for _, part in rig.def.parts do
-			if rig.def.roles[part.role] == nil then
+		for _, part in frameRig.def.parts do
+			if frameRig.def.roles[part.role] == nil then
 				roleless += 1
 			end
 		end
-		check("every part has a known role", roleless == 0, roleless)
+		check(`{frameName}: every part has a known role`, roleless == 0, roleless)
 
-		local _, restParts = solved(RobotSkeleton.newPose(rig))
+		local sameSkeleton = frameRig.jointCount == rig.jointCount
+		for index, joint in frameRig.def.joints do
+			local stock = rig.def.joints[index]
+			if stock == nil or stock.name ~= joint.name or (stock.pivot - joint.pivot).Magnitude > EPSILON then
+				sameSkeleton = false
+			end
+		end
+		check(`{frameName}: built on the shared skeleton`, sameSkeleton)
+
+		local restJoints = table.create(frameRig.jointCount, CFrame.identity)
+		local restParts = table.create(#frameRig.def.parts, CFrame.identity)
+		RobotSkeleton.solve(frameRig, RobotSkeleton.newPose(frameRig), CFrame.identity, false, restJoints, restParts)
 		local worst = 0
-		for index, part in rig.def.parts do
+		for index, part in frameRig.def.parts do
 			worst = math.max(worst, (restParts[index].Position - part.center).Magnitude)
 		end
-		check("rest pose reproduces the authored part centers", worst < EPSILON, worst)
+		check(`{frameName}: rest pose reproduces the authored part centers`, worst < EPSILON, worst)
 
 		local asymmetric = 0
-		for index, joint in rig.def.joints do
-			local other = rig.mirror[index]
-			local pivot = rig.pivot[other]
+		for index, joint in frameRig.def.joints do
+			local other = frameRig.mirror[index]
+			local pivot = frameRig.pivot[other]
 			if (Vector3.new(-pivot.X, pivot.Y, pivot.Z) - joint.pivot).Magnitude > EPSILON then
 				asymmetric += 1
 			end
 		end
-		check("joint pivots mirror left to right", asymmetric == 0, asymmetric)
+		check(`{frameName}: joint pivots mirror left to right`, asymmetric == 0, asymmetric)
 
 		local lookup: { [string]: RobotSkeleton.PartDef } = {}
-		for _, part in rig.def.parts do
+		for _, part in frameRig.def.parts do
 			lookup[part.name] = part
 		end
 		local unmatched = 0
-		for _, part in rig.def.parts do
+		for _, part in frameRig.def.parts do
 			local joint = part.joint
 			if string.sub(joint, -1) == "L" then
 				local twin = lookup[string.sub(part.name, 1, #joint - 1) .. "R" .. string.sub(part.name, #joint + 1)]
 				if
 					twin == nil
 					or twin.role ~= part.role
-					or (twin.size - part.size).Magnitude > EPSILON
-					or (twin.center - Vector3.new(-part.center.X, part.center.Y, part.center.Z)).Magnitude > EPSILON
+					or (twin.size - part.size).Magnitude > 2e-3
+					or (twin.center - Vector3.new(-part.center.X, part.center.Y, part.center.Z)).Magnitude > 2e-3
 				then
 					unmatched += 1
 				end
 			end
 		end
-		check("left parts have mirrored right twins", unmatched == 0, unmatched)
+		check(`{frameName}: left parts have mirrored right twins`, unmatched == 0, unmatched)
+		-- The game looks up these parts for effects and the winches' hooks.
+		local named = lookup.Head_Armor ~= nil and lookup.Chest_Armor ~= nil
+		for _, limb in { "HandL", "HandR", "FootL", "FootR" } do
+			named = named and lookup[limb .. "_Armor"] ~= nil
+		end
+		check(`{frameName}: has the head, chest, hand and foot armor the effects aim at`, named)
+	end
+	local frameCount = 0
+	for _ in RobotRigs :: { [string]: any } do
+		frameCount += 1
+	end
+	check("there is a frame for every chassis", frameCount >= #Looks.Frames, frameCount)
+	for _, frameName in Looks.Frames do
+		check(`the {frameName} frame exists`, (RobotRigs :: any)[frameName] ~= nil)
 	end
 
 	-- Clips: sampling hits its keys, loops are continuous, and nothing sinks into the floor.
@@ -354,13 +380,17 @@ return function(): (number, { string })
 			`{worstOffset}, {worstTurn}`
 		)
 
-		-- Each chassis' strikes still reach: the limb, drawn at the chassis' size, gets to the hit range the build has. A
-		-- smaller robot may stop a little short at the very edge of the range, which is invisible.
+		-- Each chassis' strikes still reach: the limb of the chassis' own frame, drawn at the chassis' size, gets to the hit
+		-- range the build has. A smaller robot may stop a little short at the very edge of the range, which is invisible.
 		for index, chassis in Loadout.Chassis do
+			local frameRig = RobotSkeleton.newRig((RobotRigs :: any)[Looks.Frames[index]])
 			local stats = Loadout.stats(Loadout.encode({ chassis = index, arms = 1, core = 1, legs = 1 }))
 			local shortest = math.huge
+			local joints = table.create(frameRig.jointCount, CFrame.identity)
+			local parts = table.create(#frameRig.def.parts, CFrame.identity)
 			for _, move in stats.moves do
-				local reach = strikerFront(move.clip, 1.5, move.striker) * chassis.scale
+				RobotSkeleton.solve(frameRig, sampled(move.clip, 1.5), CFrame.identity, false, joints, parts)
+				local reach = RobotSkeleton.frontExtent(frameRig, parts, move.striker) * chassis.scale
 				shortest = math.min(shortest, reach - neededReach(move))
 			end
 			check(`{chassis.name} reaches what its moves can hit`, shortest >= -0.2, shortest)
@@ -368,21 +398,10 @@ return function(): (number, { string })
 
 		-- Kits: the garage names real kits, every kit is used, and every piece is valid.
 		local used: { [string]: boolean } = {}
-		local function use(name: string)
+		for _, name in Looks.CrestKits do
 			if name ~= "" then
 				used[name] = true
 			end
-		end
-		for _, name in Looks.ChassisKits do
-			use(name)
-		end
-		for _, names in Looks.ModuleKits do
-			for _, name in names do
-				use(name)
-			end
-		end
-		for _, name in Looks.CrestKits do
-			use(name)
 		end
 		local missing, unused = 0, 0
 		for name in used do

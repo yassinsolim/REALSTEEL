@@ -1,10 +1,13 @@
-"""Builds the robot: meshes, FBX, rig data, poses and preview renders. Run headless through scripts/art.ps1:
+"""Builds the robots: every frame's meshes, worn-metal textures, FBX and rig data, the poses and preview renders. Run
+headless through scripts/art.ps1:
 
     blender --background --factory-startup --python art/build_robot.py -- --out art/build --luau src/shared \
         --previews poses --engine WORKBENCH
 
-Outputs in --out (regenerable, not tracked): <Name>.fbx, <Name>.rig.json, preview PNGs. --luau gets RobotRigs.luau,
-RobotClips.luau and RobotKits.luau (the add-on kits from art/kits.py). --previews kits renders the kits on the robot.
+Outputs in --out (regenerable, not tracked): <Name>.fbx, <Name>.rig.json, textures/<Name>_*.png (see wear.py), preview
+PNGs. --luau gets RobotRigs.luau (every frame), RobotClips.luau and RobotKits.luau (the crests from art/kits.py).
+--frames BULWARK,LANCE limits the textures and FBX to those frames. --previews kits renders the crests and paint jobs,
+frames the frames, worn the frames wearing their textures; a preview run exports nothing.
 """
 
 import argparse
@@ -64,6 +67,7 @@ def parse():
     parser.add_argument("--luau", default="")
     parser.add_argument("--previews", default="none", choices=["none", "rest", "poses", "all", "kits", "frames", "worn"])
     parser.add_argument("--sheets", default="")
+    parser.add_argument("--frames", default="", help="comma-separated frame labels to export (default: all)")
     parser.add_argument("--engine", default="WORKBENCH", choices=["WORKBENCH", "EEVEE"])
     return parser.parse_args(arguments)
 
@@ -78,8 +82,6 @@ def report(robot, poses):
         print("lowest point %-8s y = %.3f" % (name, low))
 
 
-# Chassis as the game draws them. Keep the scales in step with Loadout.luau.
-CHASSIS_LOOK = (("ANVIL", 1.0), ("BULWARK", 1.08), ("LANCE", 1.1), ("RAZOR", 0.94), ("MAUL", 1.06))
 STEEL = (0.52, 0.56, 0.66)
 GUNMETAL = (0.2, 0.21, 0.26)
 BLUE = (0.18, 0.5, 1.0)
@@ -87,27 +89,11 @@ RED = (1.0, 0.33, 0.27)
 
 
 def kit_previews(robot, out, sheets, poses):
-    """Contact sheets of the kits: chassis, modules, crests and paint. --sheets picks some of them."""
+    """Contact sheets of the crests and of paint jobs on ANVIL. --sheets picks some of them. (The chassis are frames of
+    their own now; --previews frames renders them.)"""
     kits.build()
-    wanted = sheets.split(",") if sheets else ["chassis", "modules", "crests", "looks"]
+    wanted = sheets.split(",") if sheets else ["crests", "looks"]
     steel = preview_kits.palette_materials(STEEL, BLUE)
-    if "chassis" in wanted:
-        entries = []
-        for name, scale in CHASSIS_LOOK:
-            entries.append((name, {"kits": preview_kits.kits_for(name), "scale": scale, "materials": steel}))
-        for view in ("front", "three", "side"):
-            preview_kits.sheet(robot, entries, os.path.join(out, "kits_chassis_%s.png" % view), view, 6.8, (2400, 900))
-        for name, spec in entries:
-            spec["pose"] = poses["JabStrike"]
-        preview_kits.sheet(robot, entries, os.path.join(out, "kits_chassis_jab.png"), "side", 7.4, (2400, 900))
-    if "modules" in wanted:
-        entries = [("STOCK", {"kits": [], "materials": steel})]
-        for slot, options in kits.MODULE_KITS.items():
-            for option, kit_name in options.items():
-                arms, core, legs = (option if slot == name else 1 for name in ("ARMS", "CORE", "LEGS"))
-                entries.append((kit_name, {"kits": preview_kits.kits_for("ANVIL", arms, core, legs), "materials": steel}))
-        for view in ("front", "three", "side"):
-            preview_kits.sheet(robot, entries, os.path.join(out, "kits_modules_%s.png" % view), view, 6.2, (2800, 900))
     if "crests" in wanted:
         entries = [(name, {"kits": [name], "materials": steel}) for name in kits.CRESTS]
         preview_kits.sheet(
@@ -140,8 +126,7 @@ def worn_previews(anvil_robot, out, engine):
         robot = anvil_robot if module is anvil else module.build()
         started = time.time()
         wear.unwrap(robot)
-        signals, ids, normal = wear.bake(robot)
-        paths = wear.save(wear.compose(signals, ids, normal), robot.name, os.path.join(out, "textures"))
+        paths = wear.save(wear.compose(wear.bake(robot)), robot.name, os.path.join(out, "textures"))
         print("worn %-8s baked in %.1f s" % (label, time.time() - started))
         frames.append((label, robot, module.ROLES, scale, paths))
     preview_frames.setup(engine)
@@ -204,27 +189,63 @@ def frame_previews(anvil_robot, out):
         preview_frames.hero(robot, mats, stance, os.path.join(out, "hero_%s.png" % label.lower()), accent, scale)
 
 
+def discard_robot(robot):
+    """Removes a built frame's objects and meshes, so the next frame can use the same part names."""
+    for part in robot.parts:
+        mesh = part.obj.data
+        bpy.data.objects.remove(part.obj)
+        bpy.data.meshes.remove(mesh)
+
+
+def export_frames(out, luau, only=None):
+    """Every frame in turn: worn textures baked onto its UV atlas, then its FBX and rig JSON with the same UVs. One frame
+    is in the scene at a time, so every frame's parts keep their plain names (Chest_Armor, not Chest_Armor.001). `only`
+    (a set of frame labels) limits the textures and FBX to those frames; every frame still goes into the rig module.
+    Returns the rigs for the Luau module as [(robot, roles)] and ANVIL's poses for the clips."""
+    rigs = []
+    poses = None
+    for label, module, _scale in FRAMES:
+        robot = module.build()
+        print("frame %-8s %3d parts, %5d triangles" % (label, len(robot.parts), sum(part.triangles for part in robot.parts)))
+        robot_poses = pose_library.finalize(robot)
+        for name, hand, needed in REACH_CHECKS:
+            reach = robotlib.front_extent(robot, robot_poses[name], hand)
+            if reach < needed:
+                print("  reach %-15s %s %.2f studs, short of %.2f" % (name, hand, reach, needed))
+        if module is anvil:
+            poses = robot_poses
+            report(robot, poses)
+        if only is None or label in only:
+            wear.unwrap(robot)
+            wear.save(wear.compose(wear.bake(robot)), robot.name, os.path.join(out, "textures"))
+            exporters.export_fbx(robot, out)
+            exporters.export_json(robot, module.ROLES, out)
+            print("  exported %s.fbx and its textures" % robot.name)
+        rigs.append((robot, module.ROLES))
+        discard_robot(robot)
+    if luau:
+        exporters.export_luau(rigs, os.path.join(luau, "RobotRigs.luau"))
+    return poses
+
+
 def main():
     options = parse()
     out = os.path.abspath(options.out)
     os.makedirs(out, exist_ok=True)
     bpy.ops.wm.read_factory_settings(use_empty=True)
 
-    robot = anvil.build()
-    print("total %d parts, %d triangles" % (len(robot.parts), sum(part.triangles for part in robot.parts)))
-    exporters.export_fbx(robot, out)
-    exporters.export_json(robot, anvil.ROLES, out)
-    poses = pose_library.finalize(robot)
-    report(robot, poses)
-    if options.luau:
-        luau = os.path.abspath(options.luau)
-        exporters.export_luau(robot, anvil.ROLES, os.path.join(luau, "RobotRigs.luau"))
-        exporters.export_clips(poses, pose_library.CLIPS, os.path.join(luau, "RobotClips.luau"))
-        kits.build()
-        kits.export_luau(os.path.join(luau, "RobotKits.luau"))
-
     if options.previews == "none":
+        luau = os.path.abspath(options.luau) if options.luau else ""
+        only = set(options.frames.upper().split(",")) if options.frames else None
+        poses = export_frames(out, luau, only)
+        if luau:
+            exporters.export_clips(poses, pose_library.CLIPS, os.path.join(luau, "RobotClips.luau"))
+            kits.build()
+            kits.export_luau(os.path.join(luau, "RobotKits.luau"))
         return
+
+    robot = anvil.build()
+    poses = pose_library.finalize(robot)
     if options.previews == "worn":
         worn_previews(robot, out, options.engine)
         return

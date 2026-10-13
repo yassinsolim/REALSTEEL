@@ -6,7 +6,7 @@
 return {
 	poses = {
 		BlockRecoil = {
-			pos = Vector3.new(0, 0.022, 0.28),
+			pos = Vector3.new(0, 0.0464, 0.28),
 			rot = {
 				Chest = Vector3.new(-7, -10, 0),
 				FootL = Vector3.new(20, 0, 0),
@@ -24,7 +24,7 @@ return {
 			},
 		},
 		DashB = {
-			pos = Vector3.new(0, -0.1651, 0.2),
+			pos = Vector3.new(0, -0.1585, 0.2),
 			rot = {
 				Chest = Vector3.new(2, -12, 0),
 				FootL = Vector3.new(34, 0, 0),
@@ -42,7 +42,7 @@ return {
 			},
 		},
 		DashCoil = {
-			pos = Vector3.new(0, -0.249, 0),
+			pos = Vector3.new(0, -0.2411, 0),
 			rot = {
 				Chest = Vector3.new(-18, -12, 0),
 				FootL = Vector3.new(22, 0, 0),
@@ -60,7 +60,7 @@ return {
 			},
 		},
 		DashF = {
-			pos = Vector3.new(0, -0.2356, -0.2),
+			pos = Vector3.new(0, -0.2247, -0.2),
 			rot = {
 				Chest = Vector3.new(-14, -12, 0),
 				FootL = Vector3.new(14, 0, 0),
@@ -78,7 +78,7 @@ return {
 			},
 		},
 		DashL = {
-			pos = Vector3.new(-0.15, -0.1706, 0),
+			pos = Vector3.new(-0.15, -0.1611, 0),
 			rot = {
 				Chest = Vector3.new(-12, -12, 10),
 				FootL = Vector3.new(18, 0, 0),
@@ -96,7 +96,7 @@ return {
 			},
 		},
 		DashR = {
-			pos = Vector3.new(0.15, -0.2637, 0),
+			pos = Vector3.new(0.15, -0.2479, 0),
 			rot = {
 				Chest = Vector3.new(-12, -12, -10),
 				FootL = Vector3.new(18, 0, -26),
@@ -114,7 +114,7 @@ return {
 			},
 		},
 		Guard = {
-			pos = Vector3.new(0, 0.022, 0.05),
+			pos = Vector3.new(0, 0.0464, 0.05),
 			rot = {
 				Chest = Vector3.new(-16, -10, 0),
 				FootL = Vector3.new(20, 0, 0),
@@ -132,7 +132,7 @@ return {
 			},
 		},
 		HitHeavyImpact = {
-			pos = Vector3.new(0, -0.0496, 0.4),
+			pos = Vector3.new(0, -0.0382, 0.4),
 			rot = {
 				Chest = Vector3.new(7, -12, 0),
 				FootL = Vector3.new(16, 0, 0),
@@ -150,7 +150,7 @@ return {
 			},
 		},
 		HitHeavyPeak = {
-			pos = Vector3.new(0, -0.0597, 0.75),
+			pos = Vector3.new(0, -0.051, 0.75),
 			rot = {
 				Chest = Vector3.new(17, -12, 8),
 				FootL = Vector3.new(26, 0, 0),
@@ -168,7 +168,7 @@ return {
 			},
 		},
 		HitLightImpact = {
-			pos = Vector3.new(0, -0.0518, 0.2),
+			pos = Vector3.new(0, -0.0383, 0.2),
 			rot = {
 				Chest = Vector3.new(0, -12, 0),
 				FootL = Vector3.new(16, 0, 0),
@@ -186,7 +186,7 @@ return {
 			},
 		},
 		HitLightPeak = {
-			pos = Vector3.new(0, -0.0496, 0.4),
+			pos = Vector3.new(0, -0.0382, 0.4),
 			rot = {
 				Chest = Vector3.new(6, -12, 6),
 				FootL = Vector3.new(16, 0, 0),
@@ -204,7 +204,7 @@ return {
 			},
 		},
 		IdleB = {
-			pos = Vector3.new(0, -0.0624, 0),
+			pos = Vector3.new(0, -0.0469, 0),
 			rot = {
 				Chest = Vector3.new(-6.5, -12, 0),
 				FootL = Vector3.new(16, 0, 0),
@@ -222,7 +222,7 @@ return {
 			},
 		},
 		IntroA = {
-			pos = Vector3.new(0, -0.176, 0),
+			pos = Vector3.new(0, -0.1626, 0),
 			rot = {
 				Chest = Vector3.new(-4, -8, 0),
 				FootL = Vector3.new(18, 0, 0),
@@ -240,7 +240,7 @@ return {
 			},
 		},
 		IntroB = {
-			pos = Vector3.new(0, -0.176, 0),
+			pos = Vector3.new(0, -0.1626, 0),
 			rot = {
 				Chest = Vector3.new(-7, -8, 0),
 				FootL = Vector3.new(18, 0, 0),
@@ -258,7 +258,7 @@ return {
 			},
 		},
 		JabChamber = {
-			pos = Vector3.new(0, -0.0624, 0.06),
+			pos = Vector3.new(0, -0.0469, 0.06),
 			rot = {
 				Chest = Vector3.new(-11, -20, 0),
 				FootL = Vector3.new(16, 0, 0),
@@ -276,7 +276,7 @@ return {
 			},
 		},
 		JabHold = {
-			pos = Vector3.new(0, -0.1881, -0.62),
+			pos = Vector3.new(0, -0.1816, -0.62),
 			rot = {
 				Chest = Vector3.new(-16, -16, 0),
 				FootL = Vector3.new(2, 0, 0),
@@ -294,7 +294,7 @@ return {
 			},
 		},
 		JabStrike = {
-			pos = Vector3.new(0, -0.1881, -0.55),
+			pos = Vector3.new(0, -0.1816, -0.55),
 			rot = {
 				Chest = Vector3.new(-14, -14, 0),
 				FootL = Vector3.new(2, 0, 0),
@@ -330,7 +330,7 @@ return {
 			},
 		},
 		KoDown = {
-			pos = Vector3.new(0, -1.8546, 2.2),
+			pos = Vector3.new(0, -1.8345, 2.2),
 			rot = {
 				ForearmL = Vector3.new(8, 0, 0),
 				ForearmR = Vector3.new(8, 0, 0),
@@ -345,7 +345,7 @@ return {
 			},
 		},
 		KoFall = {
-			pos = Vector3.new(0, -0.8288, 1.6),
+			pos = Vector3.new(0, -0.8077, 1.6),
 			rot = {
 				Chest = Vector3.new(14, 0, 4),
 				FootL = Vector3.new(26, 0, 0),
@@ -363,7 +363,7 @@ return {
 			},
 		},
 		KoSettle = {
-			pos = Vector3.new(0, -1.8546, 2.2),
+			pos = Vector3.new(0, -1.8345, 2.2),
 			rot = {
 				ForearmL = Vector3.new(2, 0, 0),
 				ForearmR = Vector3.new(2, 0, 0),
@@ -378,7 +378,7 @@ return {
 			},
 		},
 		PowerChamber = {
-			pos = Vector3.new(0, -0.0245, 0.2),
+			pos = Vector3.new(0, -0.0176, 0.2),
 			rot = {
 				Chest = Vector3.new(8, -30, 0),
 				FootL = Vector3.new(12, 0, 0),
@@ -396,7 +396,7 @@ return {
 			},
 		},
 		PowerHold = {
-			pos = Vector3.new(0, -0.0019, -0.95),
+			pos = Vector3.new(0, 0.0039, -0.95),
 			rot = {
 				Chest = Vector3.new(24, 22, 0),
 				FootL = Vector3.new(10, 0, 0),
@@ -414,7 +414,7 @@ return {
 			},
 		},
 		PowerStrike = {
-			pos = Vector3.new(0, -0.0019, -0.85),
+			pos = Vector3.new(0, 0.0039, -0.85),
 			rot = {
 				Chest = Vector3.new(22, 22, 0),
 				FootL = Vector3.new(10, 0, 0),
@@ -432,7 +432,7 @@ return {
 			},
 		},
 		Slump = {
-			pos = Vector3.new(0, 0.001, 0),
+			pos = Vector3.new(0, 0.0062, 0),
 			rot = {
 				Chest = Vector3.new(-16, 0, 0),
 				FootL = Vector3.new(6, 0, 0),
@@ -449,7 +449,7 @@ return {
 			},
 		},
 		SnapChamber = {
-			pos = Vector3.new(0, -0.0478, 0.12),
+			pos = Vector3.new(0, -0.0426, 0.12),
 			rot = {
 				Chest = Vector3.new(6, -8, 0),
 				FootL = Vector3.new(24, 0, 0),
@@ -467,7 +467,7 @@ return {
 			},
 		},
 		SnapHold = {
-			pos = Vector3.new(0, -0.0683, -0.58),
+			pos = Vector3.new(0, -0.0631, -0.58),
 			rot = {
 				Chest = Vector3.new(14, -6, 0),
 				FootL = Vector3.new(-6, 0, 0),
@@ -485,7 +485,7 @@ return {
 			},
 		},
 		SnapStrike = {
-			pos = Vector3.new(0, -0.0683, -0.5),
+			pos = Vector3.new(0, -0.0631, -0.5),
 			rot = {
 				Chest = Vector3.new(12, -6, 0),
 				FootL = Vector3.new(-6, 0, 0),
@@ -503,7 +503,7 @@ return {
 			},
 		},
 		Stance = {
-			pos = Vector3.new(0, -0.0624, 0),
+			pos = Vector3.new(0, -0.0469, 0),
 			rot = {
 				Chest = Vector3.new(-9, -12, 0),
 				FootL = Vector3.new(16, 0, 0),
@@ -521,7 +521,7 @@ return {
 			},
 		},
 		StraightChamber = {
-			pos = Vector3.new(0, -0.1041, 0.12),
+			pos = Vector3.new(0, -0.0992, 0.12),
 			rot = {
 				Chest = Vector3.new(-12, -34, 0),
 				FootL = Vector3.new(12, 0, 0),
@@ -539,7 +539,7 @@ return {
 			},
 		},
 		StraightHold = {
-			pos = Vector3.new(0, -0.2076, -0.8),
+			pos = Vector3.new(0, -0.202, -0.8),
 			rot = {
 				Chest = Vector3.new(-16, 38, 0),
 				FootL = Vector3.new(8, 0, 0),
@@ -557,7 +557,7 @@ return {
 			},
 		},
 		StraightStrike = {
-			pos = Vector3.new(0, -0.2076, -0.7),
+			pos = Vector3.new(0, -0.202, -0.7),
 			rot = {
 				Chest = Vector3.new(-16, 34, 0),
 				FootL = Vector3.new(8, 0, 0),
@@ -575,7 +575,7 @@ return {
 			},
 		},
 		VictoryA = {
-			pos = Vector3.new(0, 0.0225, 0),
+			pos = Vector3.new(0, 0.0301, 0),
 			rot = {
 				Chest = Vector3.new(6, 0, 0),
 				FootL = Vector3.new(6, 0, 0),
@@ -592,7 +592,7 @@ return {
 			},
 		},
 		VictoryB = {
-			pos = Vector3.new(0, 0.0225, 0),
+			pos = Vector3.new(0, 0.0301, 0),
 			rot = {
 				Chest = Vector3.new(8, 0, 0),
 				FootL = Vector3.new(6, 0, 0),
@@ -609,7 +609,7 @@ return {
 			},
 		},
 		WalkB0 = {
-			pos = Vector3.new(0, -0.0624, 0),
+			pos = Vector3.new(0, -0.0469, 0),
 			rot = {
 				Chest = Vector3.new(-9, -12, 0),
 				FootL = Vector3.new(42, 0, 0),
@@ -627,7 +627,7 @@ return {
 			},
 		},
 		WalkB1 = {
-			pos = Vector3.new(0, 0.1246, 0),
+			pos = Vector3.new(0, 0.14, 0),
 			rot = {
 				Chest = Vector3.new(-9, -15, 0),
 				FootL = Vector3.new(34, 0, 0),
@@ -645,7 +645,7 @@ return {
 			},
 		},
 		WalkB2 = {
-			pos = Vector3.new(0, -0.1621, 0),
+			pos = Vector3.new(0, -0.1574, 0),
 			rot = {
 				Chest = Vector3.new(-9, -12, 0),
 				FootL = Vector3.new(16, 0, 0),
@@ -663,7 +663,7 @@ return {
 			},
 		},
 		WalkB3 = {
-			pos = Vector3.new(0, -0.3703, 0),
+			pos = Vector3.new(0, -0.3665, 0),
 			rot = {
 				Chest = Vector3.new(-9, -9, 0),
 				FootL = Vector3.new(-2, 0, 0),
@@ -681,7 +681,7 @@ return {
 			},
 		},
 		WalkF0 = {
-			pos = Vector3.new(0, -0.0624, 0),
+			pos = Vector3.new(0, -0.0469, 0),
 			rot = {
 				Chest = Vector3.new(-9, -12, 0),
 				FootL = Vector3.new(42, 0, 0),
@@ -699,7 +699,7 @@ return {
 			},
 		},
 		WalkF1 = {
-			pos = Vector3.new(0, -0.3703, 0),
+			pos = Vector3.new(0, -0.3665, 0),
 			rot = {
 				Chest = Vector3.new(-9, -9, 0),
 				FootL = Vector3.new(-2, 0, 0),
@@ -717,7 +717,7 @@ return {
 			},
 		},
 		WalkF2 = {
-			pos = Vector3.new(0, -0.1621, 0),
+			pos = Vector3.new(0, -0.1574, 0),
 			rot = {
 				Chest = Vector3.new(-9, -12, 0),
 				FootL = Vector3.new(16, 0, 0),
@@ -735,7 +735,7 @@ return {
 			},
 		},
 		WalkF3 = {
-			pos = Vector3.new(0, 0.1246, 0),
+			pos = Vector3.new(0, 0.14, 0),
 			rot = {
 				Chest = Vector3.new(-9, -15, 0),
 				FootL = Vector3.new(34, 0, 0),
@@ -753,7 +753,7 @@ return {
 			},
 		},
 		WalkL0 = {
-			pos = Vector3.new(0, -0.0624, 0),
+			pos = Vector3.new(0, -0.0469, 0),
 			rot = {
 				Chest = Vector3.new(-9, -12, 0),
 				FootL = Vector3.new(34.2, 0, 0),
@@ -771,7 +771,7 @@ return {
 			},
 		},
 		WalkL1 = {
-			pos = Vector3.new(0, -0.226, 0),
+			pos = Vector3.new(0, -0.2105, 0),
 			rot = {
 				Chest = Vector3.new(-9, -12, -2),
 				FootL = Vector3.new(16, 0, 16),
@@ -789,7 +789,7 @@ return {
 			},
 		},
 		WalkL2 = {
-			pos = Vector3.new(0, -0.1621, 0),
+			pos = Vector3.new(0, -0.1574, 0),
 			rot = {
 				Chest = Vector3.new(-9, -12, 0),
 				FootL = Vector3.new(16, 0, 0),
@@ -807,7 +807,7 @@ return {
 			},
 		},
 		WalkL3 = {
-			pos = Vector3.new(0, -0.0816, 0),
+			pos = Vector3.new(0, -0.0664, 0),
 			rot = {
 				Chest = Vector3.new(-9, -12, 2),
 				FootL = Vector3.new(16, 0, -16),
@@ -825,7 +825,7 @@ return {
 			},
 		},
 		WalkR0 = {
-			pos = Vector3.new(0, -0.0624, 0),
+			pos = Vector3.new(0, -0.0469, 0),
 			rot = {
 				Chest = Vector3.new(-9, -12, 0),
 				FootL = Vector3.new(34.2, 0, 0),
@@ -843,7 +843,7 @@ return {
 			},
 		},
 		WalkR1 = {
-			pos = Vector3.new(0, -0.0816, 0),
+			pos = Vector3.new(0, -0.0664, 0),
 			rot = {
 				Chest = Vector3.new(-9, -12, 2),
 				FootL = Vector3.new(16, 0, -16),
@@ -861,7 +861,7 @@ return {
 			},
 		},
 		WalkR2 = {
-			pos = Vector3.new(0, -0.1621, 0),
+			pos = Vector3.new(0, -0.1574, 0),
 			rot = {
 				Chest = Vector3.new(-9, -12, 0),
 				FootL = Vector3.new(16, 0, 0),
@@ -879,7 +879,7 @@ return {
 			},
 		},
 		WalkR3 = {
-			pos = Vector3.new(0, -0.226, 0),
+			pos = Vector3.new(0, -0.2105, 0),
 			rot = {
 				Chest = Vector3.new(-9, -12, -2),
 				FootL = Vector3.new(16, 0, 16),

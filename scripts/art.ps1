@@ -1,16 +1,19 @@
 param(
-    [ValidateSet('none', 'rest', 'poses', 'all', 'kits')]
+    [ValidateSet('none', 'rest', 'poses', 'all', 'kits', 'frames', 'worn')]
     [string]$Previews = 'none',
     [ValidateSet('WORKBENCH', 'EEVEE')]
     [string]$Engine = 'WORKBENCH',
     [string]$Sheets = '',
+    [string]$Frames = '',
     [string]$Blender = ''
 )
 
-# Rebuilds the robot art with Blender running headless: art/build/<Name>.fbx and rig data (not tracked), plus the
-# generated Luau modules src/shared/RobotRigs.luau, RobotClips.luau and RobotKits.luau (tracked, formatted with stylua).
-# -Previews poses renders contact sheets of the key poses into art/build; -Previews kits renders the add-on kits (chassis,
-# modules, crests, paint); -Engine EEVEE gives lit renders (slower).
+# Rebuilds the robot art with Blender running headless: for every frame (one robot per chassis) its worn-metal textures
+# in art/build/textures, art/build/<Name>.fbx and rig data (not tracked), plus the generated Luau modules
+# src/shared/RobotRigs.luau, RobotClips.luau and RobotKits.luau (tracked, formatted with stylua). -Frames 'BULWARK,LANCE'
+# limits the textures and FBX to those frames. Previews render instead of exporting: -Previews poses renders contact
+# sheets of the key poses into art/build, kits the crests and some paint jobs, frames lineups and a hero shot of every
+# frame, and worn bakes the textures and renders every frame wearing them (use -Engine EEVEE, which gives lit renders).
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -33,6 +36,9 @@ try {
         '--luau', 'src/shared', '--previews', $Previews, '--engine', $Engine)
     if ($Sheets) {
         $arguments += @('--sheets', $Sheets)
+    }
+    if ($Frames) {
+        $arguments += @('--frames', $Frames)
     }
     & $Blender @arguments
     if ($LASTEXITCODE -ne 0) {

@@ -113,18 +113,6 @@ def instance(robot, pose, offset, materials, active_kits, scale=1.0):
     return made
 
 
-def kits_for(chassis_name, arms=1, core=1, legs=1, crest=None):
-    active = []
-    if chassis_name in kits.CHASSIS_KITS:
-        active.append(kits.CHASSIS_KITS[chassis_name])
-    for slot, option in (("ARMS", arms), ("CORE", core), ("LEGS", legs)):
-        if option in kits.MODULE_KITS[slot]:
-            active.append(kits.MODULE_KITS[slot][option])
-    if crest:
-        active.append(crest)
-    return active
-
-
 def sheet(robot, entries, path, view="front", spacing=6.5, size=(2400, 900), center_y=3.6, ortho=None):
     """One row of robots. entries is [(label, {"kits": [...], "scale": 1.0, "materials": {...}, "pose": {...}})]."""
     count = len(entries)

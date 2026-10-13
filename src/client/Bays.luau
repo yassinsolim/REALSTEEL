@@ -15,6 +15,7 @@ local Loadout = require(Shared:WaitForChild("Loadout"))
 local Looks = require(Shared:WaitForChild("Looks"))
 local RobotSkeleton = require(Shared:WaitForChild("RobotSkeleton"))
 local FighterView = require(script.Parent:WaitForChild("FighterView"))
+local RobotFrames = require(script.Parent:WaitForChild("RobotFrames"))
 local RobotRig = require(script.Parent:WaitForChild("RobotRig"))
 
 export type Bays = {
@@ -70,19 +71,29 @@ function Bays.new(robot: FighterView.Robot, onGarage: () -> ()): Bays
 	local lastSync = -math.huge
 	local turn = 0
 
-	local function dress(entry: Entry, loadout: number, look: number)
+	-- Returns whether it dressed the robot anew (maybe rebuilt as another frame, whose parts need placing again).
+	local function dress(entry: Entry, loadout: number, look: number): boolean
 		if entry.loadout == loadout and entry.look == look then
-			return
+			return false
 		end
 		entry.loadout = loadout
 		entry.look = look
 		local chosen = Looks.decode(look)
+		local choice = Loadout.decode(loadout)
 		-- A bay has no opponent, so "team" paint is the owner's own blue and steel.
 		local colors = Looks.resolve(chosen, Looks.default())
+		local frame = RobotFrames.get(robot, Looks.frameFor(choice, chosen))
+		RobotRig.setFrame(entry.robot, frame.rig, frame.template, frame.wear)
 		RobotRig.setScale(entry.robot, Loadout.scale(loadout))
-		RobotRig.setKits(entry.robot, Looks.kitsFor(Loadout.decode(loadout), chosen))
+		RobotRig.setKits(entry.robot, Looks.kitsFor(choice, chosen))
 		RobotRig.setPalette(entry.robot, rgb(colors.accent), rgb(colors.armor))
-		RobotRig.setFinish(entry.robot, materialOf(colors.finish.material), colors.finish.reflectance)
+		RobotRig.setFinish(
+			entry.robot,
+			materialOf(colors.finish.material),
+			colors.finish.reflectance,
+			colors.finish.name
+		)
+		return true
 	end
 
 	local function place(entry: Entry, now: number)
@@ -145,9 +156,10 @@ function Bays.new(robot: FighterView.Robot, onGarage: () -> ()): Bays
 					entry = nil
 				end
 				if entry == nil then
+					local frame = RobotFrames.get(robot, nil)
 					local made: Entry = {
 						index = index,
-						robot = RobotRig.new(folder, robot.rig, rgb(Looks.Team.me.accent), robot.template),
+						robot = RobotRig.new(folder, frame.rig, rgb(Looks.Team.me.accent), frame.template, frame.wear),
 						loadout = -1,
 						look = -1,
 						offset = (index * 0.37) % 1,
@@ -178,8 +190,9 @@ function Bays.new(robot: FighterView.Robot, onGarage: () -> ()): Bays
 					loadout = previewLoadout or loadout
 					look = previewLook or look
 				end
-				dress(entry, loadout, look)
-				if owner == localPlayer then
+				-- A robot dressed anew is put back in its bay at once, however far away it is: a new frame's parts start out
+				-- at the template's pose.
+				if dress(entry, loadout, look) or owner == localPlayer then
 					place(entry, now)
 				elseif (FoundryLayout.bay(entry.index).Position - camera).Magnitude < ANIMATE_RADIUS then
 					table.insert(others, entry)

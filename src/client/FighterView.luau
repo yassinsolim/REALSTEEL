@@ -8,21 +8,19 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local FightConfig = require(Shared:WaitForChild("FightConfig"))
 local FightSim = require(Shared:WaitForChild("FightSim"))
 local RobotAnimator = require(Shared:WaitForChild("RobotAnimator"))
-local RobotSkeleton = require(Shared:WaitForChild("RobotSkeleton"))
+local RobotFrames = require(script.Parent:WaitForChild("RobotFrames"))
 local RobotRig = require(script.Parent:WaitForChild("RobotRig"))
 
--- Everything the fighters share: the compiled rig and clips, and the imported meshes when they are available.
-export type Robot = {
-	rig: RobotSkeleton.Rig,
-	clips: { [string]: RobotSkeleton.Clip },
-	template: Instance?,
-}
+-- Every frame the fighters can be drawn as, and the animation set they share (see RobotFrames).
+export type Robot = RobotFrames.Library
 
 export type View = {
 	model: Model,
 	core: Part,
 	hitViz: Part,
 	robot: RobotRig.RobotRig,
+	-- The frames the robot can be drawn as.
+	library: Robot,
 	animator: RobotAnimator.Animator,
 	-- The middle of the fighter's ring in the hall. Simulation positions are relative to it.
 	origin: Vector3,
@@ -55,16 +53,19 @@ local FLASH_FRAMES = 6
 -- `origin` is the middle of the fighter's ring in the hall (the main ring's is the hall's origin).
 function FighterView.new(model: Model, robot: Robot, origin: Vector3?): View
 	local accent = model:GetAttribute("Accent")
+	local frame = RobotFrames.get(robot, nil)
 	return {
 		model = model,
 		core = model:WaitForChild("Core") :: Part,
 		hitViz = model:WaitForChild("HitViz") :: Part,
 		robot = RobotRig.new(
 			model,
-			robot.rig,
+			frame.rig,
 			if typeof(accent) == "Color3" then accent else DEFAULT_ACCENT,
-			robot.template
+			frame.template,
+			frame.wear
 		),
+		library = robot,
 		animator = RobotAnimator.new(robot.rig, robot.clips),
 		origin = origin or Vector3.zero,
 		drawX = 0,
@@ -175,20 +176,28 @@ function FighterView.setGhost(view: View, amount: number)
 	RobotRig.setGhost(view.robot, amount)
 end
 
--- Dresses the robot for the garage's choices: how big it is, the kits it wears, its paint and the finish of its armor.
+-- Dresses the robot for the garage's choices: the frame it is drawn as, how big it is, the kits it wears, its paint and
+-- the finish of its armor (`finishName` picks the frame's worn-metal textures). Returns whether the robot was rebuilt as
+-- another frame, which takes the strike trails with the old parts (see Effects.attachSlot).
 function FighterView.dress(
 	view: View,
+	frameName: string,
 	scale: number,
 	kits: { string },
 	accent: Color3,
 	armor: Color3,
 	finish: Enum.Material?,
-	reflectance: number
-)
+	reflectance: number,
+	finishName: string
+): boolean
+	local frame = RobotFrames.get(view.library, frameName)
+	local rebuilt = RobotRig.setFrame(view.robot, frame.rig, frame.template, frame.wear)
+	view.head = nil
 	RobotRig.setScale(view.robot, scale)
 	RobotRig.setKits(view.robot, kits)
 	RobotRig.setPalette(view.robot, accent, armor)
-	RobotRig.setFinish(view.robot, finish, reflectance)
+	RobotRig.setFinish(view.robot, finish, reflectance, finishName)
+	return rebuilt
 end
 
 -- mirror draws the robot as a southpaw. The camera sits on the local fighter's right, so mirroring the opponent turns

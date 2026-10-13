@@ -3,10 +3,11 @@
 Spike for a Tekken-style 3D fighting game on Roblox. It proves that fighting-game netcode and a frame-data model work
 on Roblox's server authority mode (client prediction, rollback and resimulation) before investing in content.
 
-Fighters are ANVIL, an original articulated robot modeled in Blender and animated from the simulation state, and four more
-chassis built on it. Every player fits a robot out in the garage: a chassis, a module each for arms, core and legs, and a
-paint job. There are four attacks (a punch and a kick for each side), guard and dash, best-of-three rounds with a clock, a
-computer opponent at three levels, 1v1 versus, a training mode with a frame meter, and touch controls. Players walk around
+Fighters are five original robots modeled in Blender, one for each chassis (ANVIL, BULWARK, LANCE, RAZOR and MAUL), built
+on one skeleton, finished in worn painted metal and animated from the simulation state. Every player fits a robot out in
+the garage: a chassis, a module each for arms, core and legs, and a paint job. There are four attacks (a punch and a kick
+for each side), guard and dash, best-of-three rounds with a clock, a computer opponent at three levels, 1v1 versus, a
+training mode with a frame meter, and touch controls. Players walk around
 THE FOUNDRY, a robot fight club hall with the main ring in its middle, two practice pits beside it, everyone's robots in
 garage bays along one wall, and a line that hands each ring to whoever should have it. Robots wait hanging from winches
 under each ring's screen and are dropped onto the canvas when a match starts; wins go on the players' records, the
@@ -123,8 +124,8 @@ and on block, both in the unit checks and live in Studio.
 | Ring line | `src/shared/RingQueue.luau` | Pure: who gets which ring next, when a rematch is open, which training has to make room. |
 | Records | `src/shared/Standings.luau`; `src/server/Records.luau` | Pure rules for records, the champion's title and leaderboard order; the server's profiles, DataStore saves, all-time boards and what it publishes on `FoundryState`. See The Foundry. |
 | Winches | `src/shared/Hoist.luau`; `src/client/Cranes.luau` | Pure: how high each ring's robots hang from their winches and where the hooks are, from the ring's match phase and frame; the client draws the cables and hooks. See The Foundry. |
-| Robot art | `art/`, `scripts/art.ps1` | Blender (headless) builds the robot, exports the FBX, and generates `src/shared/RobotRigs.luau` and `RobotClips.luau`. See Robot art and animation. |
-| Garage | `src/shared/Loadout.luau`, `Looks.luau`, `RobotKits.luau`; `src/server/Garage.luau`; `src/client/GaragePanel.luau` | Chassis, modules and paint as small integer codes, the stats they derive, the add-on kits, the server's profile and the screen. See The garage. |
+| Robot art | `art/`, `scripts/art.ps1` | Blender (headless) builds the five robot frames and their worn-metal textures, exports the FBX, and generates `src/shared/RobotRigs.luau`, `RobotClips.luau` and `RobotKits.luau`; the textures are wired up in `RobotWear.model.json`. See Robot art and animation. |
+| Garage | `src/shared/Loadout.luau`, `Looks.luau`, `RobotKits.luau`; `src/server/Garage.luau`; `src/client/GaragePanel.luau` | Chassis, modules and paint as small integer codes, the stats they derive, the frame and crest each is drawn with, the server's profile and the screen. See The garage. |
 | Animation | `src/shared/RobotSkeleton.luau`, `RobotAnimator.luau` | Pure Luau forward kinematics, clip sampling, and the mapping from simulation state to a pose. |
 | Presentation | `src/client/` | Draws and poses the robots in every ring (`FighterView`, `RobotRig`, and `Bays` for the robots in the garage bays), the camera (`CameraRig`), hit effects (`Effects`), sound (`Sfx`), HUD (`Hud`), the hall's PLAY button and line status (`LobbyHud`), the scoreboards over the rings (`Jumbotron`), the winches' cables and hooks (`Cranes`), the champion's statue (`Statue`) and the leaderboards (`Leaderboards`), menu (`Menu`), garage (`GaragePanel`), training overlay, touch controls, smoothing of rollback corrections. |
 
@@ -389,16 +390,16 @@ back to its team colors.
   once; the panel sends it at most every 0.2 s and keeps asking until the server's published copy matches, giving up after
   4 s. `CameraRig` has a garage mode that sways a little around the robot's front with a lens shift, so the robot stands in
   the middle of what the panel leaves free, and backs off or opens the lens when that is too small.
-- **Kits.** What a chassis or a module changes is drawn as add-on kits, plain Parts fastened to the rig's joints: 14 kits and
-  204 pieces authored in `art/kits.py` (pure Python) and generated into `src/shared/RobotKits.luau` by
-  `python art/kits.py --luau src/shared` or `.\scripts\art.ps1`. A chassis is also drawn larger or smaller (`scale`; the hit
-  circle does not change). `.\scripts\art.ps1 -Previews kits -Sheets 'chassis,modules'` renders contact sheets (chassis,
-  modules, crests, looks) into `art\build\kits_*.png`; quote the list. The pieces are primitives for now and could become
-  meshes later.
+- **Frames and crests.** Each chassis is drawn as its own robot, a frame (see Robot art and animation), a little larger or
+  smaller (`scale`; the hit circle does not change), and swaps in place when the chassis changes. Modules change numbers
+  only and draw nothing for now. The crests are add-on kits, plain Parts fastened to the head joint, so they fit every
+  frame: 4 kits and 12 pieces authored in `art/kits.py` (pure Python) and generated into `src/shared/RobotKits.luau` by
+  `python art/kits.py --luau src/shared` or `.\scripts\art.ps1`. `.\scripts\art.ps1 -Previews kits` renders the crests and
+  some paint jobs into `art\build\kits_*.png`.
 - **Adding a part.** Add it to the end of `Loadout.Chassis` or `Loadout.Modules` (a mod is a table of multipliers and frame
-  counts, see `Loadout.Mod`), give it a kit in `art/kits.py` and in `Looks.ChassisKits` or `Looks.ModuleKits`, then run
-  `LoadoutSpec`, the balance tournament and the preview sheets. Choices are saved as positions in these lists, so inserting
-  in the middle would change what a saved garage means.
+  counts, see `Loadout.Mod`); a new chassis also needs a frame of its own (in `build_robot.FRAMES` and `Looks.Frames`).
+  Then run `LoadoutSpec`, `RobotSpec`, the balance tournament and the preview renders. Choices are saved as positions in
+  these lists, so inserting in the middle would change what a saved garage means.
 - **Balance.** `.\scripts\balance.ps1 -Luau <path to luau.exe> -Mode all` (or `chassis`, `modules`, `presets`; `-Level 1` to
   `3`, `-Rounds`) plays the bot on both sides of every matchup headlessly. With the numbers as they are, the stock chassis win
   46-50% against each other at MEDIUM and 47-53% at HARD, every ready-made build wins 46-58% at MEDIUM and 47-55% at HARD, and
@@ -409,43 +410,76 @@ back to its team colors.
 
 ## Robot art and animation
 
-ANVIL is a heavyweight boxing robot built from beveled plates, pistons and joint hubs: 50 meshes (one per joint per
-material role: Armor, Dark, Trim, Glow), 7.6k triangles, 6.5 studs tall. Trim and Glow take the player's team color.
+Each chassis is drawn as its own original robot, a frame, modeled in Blender on one shared skeleton (ANVIL's joints, in
+`art/skeleton.py`), so all five play the same animations, wear the same crests and are posed alike by the game.
+
+| Frame | Chassis | Look | Meshes | Triangles |
+| --- | --- | --- | --- | --- |
+| ANVIL | all-rounder | a classic boxer: rounded headgear with cheek guards, a ring emblem, glove-like fists, a waistband like trunks | 56 | 10.8k |
+| BULWARK | tank | a monolith: stacked slab pauldrons, a visor slit sunk in a raised collar, flared gauntlets, exhaust stacks | 62 | 14.4k |
+| LANCE | poker | a lean racer: a V torso around a reactor, a single-lens wedge head, cable tendons, spear-tipped fists | 61 | 9.8k |
+| RAZOR | rushdown | a sharp prize-fighter: a wedge helmet with V eye slits, blade shoulders, razor-edged forearms, heel spurs | 56 | 10.9k |
+| MAUL | heavy hitter | an ex-industrial loader: a cab head with beacons and a roll bar, a grille chest, hammer fists, tread feet | 60 | 12.0k |
+
+A frame has one mesh per joint per material role: Armor and Trim take the player's paint, Glow (Neon) the accent color,
+Dark is the frame between the plates (so the gaps read as panel lines) and Steel is bare metal (pistons, rivets, cables,
+knuckle plates). The designs are original: robot boxers in general are fair game, a film's characters are not.
 
 ```powershell
-.\scripts\art.ps1                          # rebuild the FBX, rig data and the generated Luau modules
-.\scripts\art.ps1 -Previews poses          # also render contact sheets of the key poses into art\build
-.\scripts\art.ps1 -Previews rest -Engine EEVEE   # lit render instead of the fast Workbench one
-.\scripts\upload-robot.ps1                 # upload art\build\Anvil.fbx and record the asset ID
+.\scripts\art.ps1                                  # every frame's textures, FBX and rig data, and the generated Luau
+.\scripts\art.ps1 -Frames BULWARK                  # only BULWARK's textures and FBX (every frame still goes into RobotRigs)
+.\scripts\art.ps1 -Previews frames -Engine EEVEE   # lineups and a hero shot of every frame into art\build
+.\scripts\art.ps1 -Previews worn -Engine EEVEE     # bake the textures and render every frame wearing them
+.\scripts\art.ps1 -Previews poses                  # contact sheets of the key poses
+.\scripts\upload-robot.ps1 -Name Bulwark           # upload art\build\Bulwark.fbx and record the asset ID
 ```
 
-- **Source:** `art/anvil.py` (geometry and joints), `art/poses.py` (poses and clips), `art/robotlib.py`, `exporters.py`,
-  `preview.py` and `build_robot.py`. Everything is authored in Roblox axes and studs (the robot faces -Z, right is +X).
-- **Outputs:** `art/build/` (FBX, rig JSON, preview PNGs; not tracked) and `src/shared/RobotRigs.luau` plus
-  `RobotClips.luau` (generated and tracked, do not edit by hand). The FBX is exported at 0.01 scale so one Blender unit is
-  one stud, and the build prints each strike's reach so it can be compared with the hit range.
+- **Source:** `art/anvil.py`, `bulwark.py`, `lance.py`, `razor.py` and `maul.py` (a frame each), `skeleton.py` (the shared
+  joints), `greebles.py` (pistons, cables, rivets, vents), `poses.py` (poses and clips), `wear.py` (the textures),
+  `kits.py` (the crests), `robotlib.py`, `exporters.py`, the `preview*.py` renderers and `build_robot.py`. Everything is
+  authored in Roblox axes and studs (the robot faces -Z, right is +X).
+- **Outputs:** `art/build/` (FBX, rig JSON, textures, preview PNGs; not tracked) and `src/shared/RobotRigs.luau` (every
+  frame), `RobotClips.luau` and `RobotKits.luau` (generated and tracked, do not edit by hand). The FBX is exported at 0.01
+  scale so one Blender unit is one stud, and the build prints each strike's reach so it can be compared with the hit range.
+- **Worn metal:** `art/wear.py` unwraps each frame onto one UV atlas, bakes a beveled-edge normal map and raw signals with
+  Cycles (edges and the band along them, seams, noise, how exposed each joint is), and numpy turns those into 1024 maps:
+  a color map whose alpha is the paint, and a metalness and a roughness map for each finish. Paint holds on the panels and
+  wears through along the edges, chipped where they take hits (most on the fists and feet), with darker steel showing
+  through and grime in the seams. Wear is all or nothing (SurfaceAppearance `AlphaMode` TintMask blends the paint toward
+  the near-white map wherever alpha falls short of 1, so a half-worn scuff on dark paint would read as a pale streak), and
+  edges are ranked within each joint, so a rounded fist wears like a slab-sided forearm. Glow parts stay Neon.
+- **Textures in the game:** `src/shared/RobotWear.model.json` holds a SurfaceAppearance per frame and finish, which
+  `RobotRig` clones onto every textured part and tints with the paint. Scripts cannot set a SurfaceAppearance's maps, so
+  they live in that file as image IDs: per frame one ColorMap and NormalMap shared by the four finishes, and a
+  MetalnessMap and RoughnessMap per finish. After a rebuild, upload the PNGs in `art\build\textures` as images (Studio's
+  Asset Manager can bulk import them) and put the new IDs in the file. The UV layout comes out the same on every build,
+  so new textures fit the uploaded meshes as long as the geometry has not changed; when it has, upload the FBX again too.
 - **Animation:** `RobotSkeleton` poses the rig by forward kinematics from the same joint data, and `RobotAnimator` picks a
   clip from the simulation state every render frame. Attack clips are sampled by phase (startup 0-1, active 1-2,
   recovery 2-3), so their timing follows `FightConfig` with no separate animation timing. Hits, blocks, dashes and
   knockouts are sampled by stun or frame progress, and walking blends four directional cycles by velocity relative to the
   opponent. An attack turns the robot toward the aim it locked in. The opponent is drawn mirrored (southpaw) so both chests
   turn toward the camera.
-- **Upload:** `scripts/upload-robot.ps1` sends the FBX through Open Cloud and writes the asset ID into
-  `src/shared/RobotAssets.luau`. It needs a key with the Assets API (Read and Write), read like `publish.ps1` does
-  (`$env:ROBLOX_API_KEY` or the stored key), and uploads under the key owner's account. Roblox loads a model only for
-  experiences owned by the uploader or a group it is shared with. An ID of 0, or a model that fails to load, gives
-  blockout robots built from the rig's part sizes, so a missing asset never breaks the game.
-- **Loading:** the server loads the model once (`RobotLibrary`) and shares it as `ReplicatedStorage.Robots`; each client
-  clones the meshes into its own parts and moves them with `BulkMoveTo`. The robots are client-only visuals, so nothing
-  about them replicates. Script cost on desktop Studio: about 3 microseconds to animate and 180 to solve and place one
-  robot per frame.
+- **Upload:** `scripts/upload-robot.ps1 -Name <Frame>` sends the frame's FBX through Open Cloud and writes its asset ID
+  into `src/shared/RobotAssets.luau` (a frame that has an ID gets a new version of the same asset). It needs a key with the
+  Assets API (Read and Write), read like `publish.ps1` does (`$env:ROBLOX_API_KEY` or the stored key), and uploads under
+  the key owner's account. Roblox loads a model only for experiences owned by the uploader or a group it is shared with.
+  An ID of 0, or a model that fails to load, gives blockout robots built from the rig's part sizes, so a missing asset
+  never breaks the game.
+- **Loading:** the server loads every frame's model once (`RobotLibrary`) and shares them as `ReplicatedStorage.Robots`;
+  `RobotFrames` gathers each frame's rig, meshes and textures on the client, which clones the meshes into its own parts
+  and moves them with `BulkMoveTo`. `RobotRig.setFrame` swaps a robot to another frame in place, keeping its size, crest,
+  paint and finish. The robots are client-only visuals, so nothing about them replicates. Script cost on desktop Studio:
+  about 3 microseconds to animate and 180 to solve and place one robot per frame.
 
 ## Tests
 
 - **Unit checks:** `FightSimSpec` covers the fight rules, the stick mapping, all four attacks and their frame data (97 checks).
-  `RobotSpec` covers the rig data, the clips, the animator, the add-on kits (their data, symmetry and where they sit at each
-  chassis' size) and, for every move, that the limb the move names reaches the hit range during the active frames and that
-  the other limb does it when the robot is drawn as a southpaw (70 checks).
+  `RobotSpec` covers every frame's rig data (known roles, the shared skeleton, the rest pose, mirrored joints and left and
+  right twin parts, the armor the effects aim at), a frame for every chassis, the clips, the animator, the crests (their
+  data, symmetry and where they sit at each chassis' size) and, for every move, that the limb the move names reaches the
+  hit range during the active frames on every chassis' own frame at its size, and that the other limb does it when the
+  robot is drawn as a southpaw (102 checks).
   `BotSpec` covers the round flow (intro, clock, KO, time-up, draws, best of three, rematch, and who has won a match that
   is torn down during its last knockout), that the bot is a pure function of its inputs, that each level reads and
   punishes the way it should, that the stronger levels fire at a walker, guard coming out of a stun and punish a dash,
@@ -454,7 +488,7 @@ material role: Armor, Dark, Trim, Glow), 7.6k triangles, 6.5 studs tall. Trim an
   `LoadoutSpec` covers the garage's data: the catalog, the codes (all 135 loadouts and every paint code survive a round
   trip, nonsense reads as the stock ANVIL), the stats each part derives, the plain-language gain and cost lines, build names,
   that the simulation, the frame data and the bot play each fighter by its own stats, that a timed-out round goes to the
-  fuller health bar, and the paint rules (140 checks).
+  fuller health bar, the paint rules, and which frame and crest a build and a look are drawn with (143 checks).
   `QueueSpec` covers the line for the rings, on one ring and on the hall's three: a bot match starting at once, a 1v1
   pairing the two earliest 1v1 players in order, a lone 1v1 waiter not holding up the line, changing what you wait for
   keeping your place, leaving the game ending the session in your ring and no other, practice filling the pits before the
@@ -519,7 +553,7 @@ material role: Armor, Dark, Trim, Glow), 7.6k triangles, 6.5 studs tall. Trim an
   test:ExecuteMultiplayerTestAsync(2, { scenario = "match", duration = 100 })
   -- One player sets a MAUL build in the garage, picks a bot level on the PLAY card and fights it in the first pit while the
   -- main ring's exhibition goes on, then leaves and comes back to train. The build must reach the fighter, so this match
-  -- is predicted with other stats and kits than the stock ANVIL.
+  -- is predicted with other stats and another frame than the stock ANVIL.
   test:ExecuteMultiplayerTestAsync(1, { scenario = "bot", duration = 25, level = 2 })
   -- Two players queue for training at once and land in a pit each, while the main ring's bots fight on. Each client
   -- predicts the other player's pit from that player's inputs.
@@ -593,17 +627,19 @@ real controller), real-device performance, and the one or two predicted hits per
    `Bays.luau`), then the robots in rings the player is far from.
 3. Decide the roster theme and the game's original name (do not use Tekken or Real Steel names, characters or moves). The
    five chassis (ANVIL, BULWARK, LANCE, RAZOR, MAUL), the modules and the presets are original names and placeholders until
-   then. Look at the garage on a real screen first: the kits are primitives, RAZOR is the least distinct silhouette, and the
-   panel has only been checked by measurement (`GarageSpec`), not by eye.
+   then. Look at the garage on a real screen first: the panel has only been checked by measurement (`GarageSpec`), not by
+   eye.
 4. Progression, which is what brings people back. The garage is built for it: gameplay parts are sidegrades open to
    everyone, so currency earned per match and per bot level, mastery with a chassis, and ranked play with ratings can
-   unlock paint, finishes, crests and, later, new chassis kits (each a few more sidegrades, never a better one), and a daily
-   challenge can hand out a limited look. Robux items should stay cosmetic. The records, the champion's title and the
-   leaderboards exist now (`Records`), so a currency can be paid out where `Records.matchEnded` counts a win. None of the
-   rest exists yet: the swatches, finishes and crests are all open, and `Looks` is where a lock would go (the server would
-   have to check it in `Garage`).
+   unlock paint, finishes, crests and, later, new chassis (each a few more sidegrades, never a better one), and a daily
+   challenge can hand out a limited look. Robux items should stay cosmetic and be sold directly, never as loot boxes:
+   alternate bodies for a chassis (another frame on the same skeleton, with the same stats), liveries and effects, with
+   some basic liveries earnable with the free currency. The records, the champion's title and the leaderboards exist now
+   (`Records`), so a currency can be paid out where `Records.matchEnded` counts a win. None of the rest exists yet: the
+   swatches, finishes and crests are all open, and `Looks` is where a lock would go (the server would have to check it in
+   `Garage`).
 5. Add a launcher and juggle rules, wall interactions, and crouching or airborne states (the sim has no hit height yet, so
    there are no lows or overheads). Each new move needs a clip in `art/poses.py`; `RobotSpec` fails until the clip exists
    and its striking hand reaches the hit range.
-6. Art: a second robot with a different silhouette, textures, and a hand-polished animation pass. Custom sound design in
-   place of the stock effects.
+6. Art: a hand-polished animation pass (the five frames share ANVIL's clips), module visuals designed for each frame, and
+   custom sound design in place of the stock effects.

@@ -25,9 +25,6 @@ local InputSetup = require(Shared:WaitForChild("InputSetup"))
 local Loadout = require(Shared:WaitForChild("Loadout"))
 local Looks = require(Shared:WaitForChild("Looks"))
 local MatchFlow = require(Shared:WaitForChild("MatchFlow"))
-local RobotClips = require(Shared:WaitForChild("RobotClips"))
-local RobotRigs = require(Shared:WaitForChild("RobotRigs"))
-local RobotSkeleton = require(Shared:WaitForChild("RobotSkeleton"))
 local Simulation = require(Shared:WaitForChild("Simulation"))
 local ArenaFx = require(script.Parent:WaitForChild("ArenaFx"))
 local Bays = require(script.Parent:WaitForChild("Bays"))
@@ -42,6 +39,7 @@ local Leaderboards = require(script.Parent:WaitForChild("Leaderboards"))
 local LobbyHud = require(script.Parent:WaitForChild("LobbyHud"))
 local MatchView = require(script.Parent:WaitForChild("MatchView"))
 local Menu = require(script.Parent:WaitForChild("Menu"))
+local RobotFrames = require(script.Parent:WaitForChild("RobotFrames"))
 local Sfx = require(script.Parent:WaitForChild("Sfx"))
 local StageLights = require(script.Parent:WaitForChild("StageLights"))
 local Statue = require(script.Parent:WaitForChild("Statue"))
@@ -108,13 +106,7 @@ end
 local ringsFolder = Workspace:WaitForChild("Rings")
 
 -- The server shares the uploaded robot meshes before it creates the fighters. Without them the robots are blockouts.
-local rig = RobotSkeleton.newRig(RobotRigs.Anvil)
-local robots = ReplicatedStorage:WaitForChild("Robots", 30)
-local robot: FighterView.Robot = {
-	rig = rig,
-	clips = RobotSkeleton.compileClips(rig, RobotClips :: any),
-	template = if robots ~= nil then robots:FindFirstChild("Anvil") else nil,
-}
+local robot: FighterView.Robot = RobotFrames.load()
 
 local camera = waitForCamera()
 local sfx = Sfx.new()
@@ -445,7 +437,7 @@ local function materialOf(name: string): Enum.Material
 	return if item ~= nil then item :: any else Enum.Material.Metal
 end
 
--- What each robot in a ring wears: its chassis' size and kits, its crest, its paint and finish, as the server set them
+-- What each robot in a ring wears: its chassis' frame and size, its crest, its paint and finish, as the server set them
 -- on the fighter. The two looks are resolved together, so the opponent never wears what is too close to the local
 -- fighter's colors. The effects follow each robot's accent; the main ring's spotlights keep the team colors, which mark
 -- the sides.
@@ -458,18 +450,25 @@ local function dressAll(ring: RingView, slot: number)
 		local resolved = if index == slot then mine else foe
 		local view = ring.views[index]
 		local code = view.core:GetAttribute("Loadout")
+		local choice = Loadout.decode(code)
 		local look = Looks.decode(ring.models[index]:GetAttribute("Look"))
 		local accent = rgb(resolved.accent)
-		FighterView.dress(
+		local rebuilt = FighterView.dress(
 			view,
+			Looks.frameFor(choice, look),
 			Loadout.scale(code),
-			Looks.kitsFor(Loadout.decode(code), look),
+			Looks.kitsFor(choice, look),
 			accent,
 			rgb(resolved.armor),
 			materialOf(resolved.finish.material),
-			resolved.finish.reflectance
+			resolved.finish.reflectance,
+			resolved.finish.name
 		)
-		Effects.setAccent(ring.effects, index, accent)
+		if rebuilt then
+			Effects.attachSlot(ring.effects, index, view, accent)
+		else
+			Effects.setAccent(ring.effects, index, accent)
+		end
 		if ring.main then
 			StageLights.setAccent(stageLights, index, if index == slot then PALETTES.me.accent else PALETTES.foe.accent)
 		end
