@@ -47,9 +47,33 @@ local function wearOf(folder: Instance?, name: string): { [string]: SurfaceAppea
 	return if found then byFinish else nil
 end
 
+-- How long a client waits for the server to share the meshes before drawing blockouts. The server always shares the
+-- folder (empty if nothing loaded), so this only matters when something is badly wrong.
+local MESH_WAIT = 120
+
+-- Whether every frame the server loaded has arrived with all of its meshes. The folder can reach a client before its
+-- contents, so the server marks how many frames it holds and how many meshes each has (see RobotLibrary).
+local function whole(robots: Instance): boolean
+	local frames = robots:GetAttribute("Frames")
+	if type(frames) ~= "number" or #robots:GetChildren() < frames then
+		return false
+	end
+	for _, template in robots:GetChildren() do
+		local parts = template:GetAttribute("Parts")
+		if type(parts) == "number" and #template:GetChildren() < parts then
+			return false
+		end
+	end
+	return true
+end
+
 -- Yields until the server has shared the meshes (or given up on them).
 function RobotFrames.load(): Library
-	local robots = ReplicatedStorage:WaitForChild("Robots", 30)
+	local deadline = os.clock() + MESH_WAIT
+	local robots = ReplicatedStorage:WaitForChild("Robots", MESH_WAIT)
+	while robots ~= nil and not whole(robots) and os.clock() < deadline do
+		task.wait(0.1)
+	end
 	local wear = Shared:FindFirstChild("RobotWear")
 	local frames: { [string]: Frame } = {}
 	for name, def in RobotRigs :: { [string]: RobotSkeleton.RigDef } do

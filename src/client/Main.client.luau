@@ -108,7 +108,8 @@ end
 
 local ringsFolder = Workspace:WaitForChild("Rings")
 
--- The server shares the uploaded robot meshes before it creates the fighters. Without them the robots are blockouts.
+-- The server shares the uploaded robot meshes a few seconds after it builds the hall; every robot waits for them. Without
+-- them the robots are blockouts.
 local robot: FighterView.Robot = RobotFrames.load()
 
 local camera = waitForCamera()

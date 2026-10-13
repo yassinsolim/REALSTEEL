@@ -28,6 +28,12 @@ local LAMP = Color3.fromRGB(255, 226, 190)
 local TEAM_BLUE = Color3.fromRGB(70, 140, 255)
 local TEAM_RED = Color3.fromRGB(255, 84, 70)
 local FLOOR_PAINT = Color3.fromRGB(36, 38, 44)
+-- The bot levels' colors, as on the PLAY card's level tiles (see Menu).
+local LEVEL_COLORS = {
+	Color3.fromRGB(90, 214, 130),
+	Color3.fromRGB(255, 190, 70),
+	Color3.fromRGB(255, 84, 84),
+}
 
 -- The bay dividers are the hall's columns on that side.
 local DIVIDER_X = -57
@@ -173,11 +179,20 @@ function FoundryStations.buildBays(model: Model): { Bay }
 end
 
 -- The pads in front of the ring: a glowing disc each, in its seat's team color for the two 1V1 pads, amber for the bot
--- pads and teal for training, a sign facing the spawn, and VS painted on the floor between the 1V1 pads. The server
--- reads who stands on them (see Pads) and the clients draw their state. Returns each pad's top by name.
+-- pads and teal for training, and signs facing the spawn: one VS BOT over the bot pads with each one's level under it,
+-- TRAINING, and 1V1 with VS painted on the floor between its pads. The server reads who stands on them (see Pads) and
+-- the clients draw their state. Returns each pad's top by name.
 function FoundryStations.buildPads(model: Model): { [string]: Part }
 	local tops: { [string]: Part } = {}
 	local versus: { Vector3 } = {}
+	local bots: { FoundryLayout.Pad } = {}
+	for _, pad in FoundryLayout.Pads do
+		if pad.kind == "bot" then
+			table.insert(bots, pad)
+		end
+	end
+	-- The middle bot pad's post also carries the VS BOT sign.
+	local botHeader = bots[math.ceil(#bots / 2)]
 	for _, pad in FoundryLayout.Pads do
 		local position = pad.position
 		local color = if pad.kind == "versus"
@@ -214,22 +229,35 @@ function FoundryStations.buildPads(model: Model): { [string]: Part }
 			table.insert(versus, position)
 		else
 			local signAt = position + Vector3.new(0, 0, -3.4)
-			Build.vbar(model, "SignPost", signAt, 5, 0.3, STEEL, Enum.Material.Metal)
+			local carriesHeader = pad == botHeader
+			Build.vbar(model, "SignPost", signAt, if carriesHeader then 7.9 else 5, 0.3, STEEL, Enum.Material.Metal)
+			-- The bot pads sit close together, so their signs are only as wide as their level.
 			local sign = Build.decor(
 				model,
 				"Sign" .. pad.name,
-				Vector3.new(5.6, 1.5, 0.3),
+				if pad.kind == "bot" then Vector3.new(3.4, 1.2, 0.3) else Vector3.new(5.6, 1.5, 0.3),
 				facing(signAt + Vector3.new(0, 5.5, 0), Vector3.zAxis),
 				DARK,
 				Enum.Material.SmoothPlastic
 			)
 			Build.label(
 				sign,
-				if pad.kind == "bot" then `BOT · {pad.label}` else pad.label,
+				pad.label,
 				Enum.Font.GothamBlack,
-				color,
+				if pad.kind == "bot" then LEVEL_COLORS[pad.level] or color else color,
 				40
 			)
+			if carriesHeader then
+				local header = Build.decor(
+					model,
+					"SignBots",
+					Vector3.new(6, 1.6, 0.3),
+					facing(signAt + Vector3.new(0, 7.5, 0), Vector3.zAxis),
+					DARK,
+					Enum.Material.SmoothPlastic
+				)
+				Build.label(header, "VS BOT", Enum.Font.GothamBlack, AMBER, 40)
+			end
 		end
 	end
 
@@ -249,11 +277,12 @@ function FoundryStations.buildPads(model: Model): { [string]: Part }
 			Enum.Material.SmoothPlastic
 		)
 		Build.label(sign, "1V1", Enum.Font.GothamBlack, Color3.new(1, 1, 1), 40)
+		-- Turned a quarter so the Top face's text reads from the spawn side.
 		local mark = Build.decor(
 			model,
 			"VersusMark",
-			Vector3.new(2.6, 0.02, 1.6),
-			CFrame.new(middle.X, 0.02, middle.Z),
+			Vector3.new(1.6, 0.02, 2.6),
+			CFrame.new(middle.X, 0.02, middle.Z) * CFrame.Angles(0, math.rad(-90), 0),
 			FLOOR_PAINT,
 			Enum.Material.SmoothPlastic
 		)

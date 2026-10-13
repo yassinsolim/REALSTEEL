@@ -414,9 +414,10 @@ local function newEmblem(parent: Instance): (Frame, TextLabel)
 	return plate, text
 end
 
--- A card of keys at the bottom left. A CanvasGroup lets the whole card fade as one.
-local function newHelpCard(parent: Instance): CanvasGroup
-	local card = Instance.new("CanvasGroup")
+-- A card of keys at the bottom left. A plain frame (a CanvasGroup's texture blurs on lower graphics settings), so it fades
+-- by fading each of its pieces; the function returned does that.
+local function newHelpCard(parent: Instance): (Frame, (visible: boolean) -> ())
+	local card = Instance.new("Frame")
 	card.Name = "Help"
 	card.AnchorPoint = Vector2.new(0, 1)
 	card.Position = UDim2.new(0, 16, 1, -16)
@@ -426,8 +427,9 @@ local function newHelpCard(parent: Instance): CanvasGroup
 	card.BorderSizePixel = 0
 	card.Parent = parent
 	round(card, 8)
-	stroke(card, TEAL, 1, 0.6)
+	local outline = stroke(card, TEAL, 1, 0.6)
 
+	local texts: { TextLabel } = {}
 	for index, row in HELP_ROWS do
 		local y = 8 + (index - 1) * 21
 		local keys = label(card, "Keys", Enum.Font.Michroma, 10)
@@ -443,8 +445,19 @@ local function newHelpCard(parent: Instance): CanvasGroup
 		action.TextXAlignment = Enum.TextXAlignment.Left
 		action.TextColor3 = Color3.fromRGB(205, 214, 230)
 		action.Text = row[2]
+		table.insert(texts, keys)
+		table.insert(texts, action)
 	end
-	return card
+
+	local function fade(visible: boolean)
+		local info = TweenInfo.new(0.35)
+		TweenService:Create(card, info, { BackgroundTransparency = if visible then 0.2 else 1 }):Play()
+		TweenService:Create(outline, info, { Transparency = if visible then 0.6 else 1 }):Play()
+		for _, text in texts do
+			TweenService:Create(text, info, { TextTransparency = if visible then 0 else 1 }):Play()
+		end
+	end
+	return card, fade
 end
 
 -- Dark gradients along the top and bottom edges: they keep the bars readable and give the picture a frame.
@@ -563,18 +576,17 @@ function Hud.new(): Hud
 	leavingText.TextColor3 = Color3.new(1, 1, 1)
 	leavingText.ZIndex = 2
 
-	local help = newHelpCard(root)
+	local help, fadeHelp = newHelpCard(root)
 	local helpPinned = false
 	local helpShown = true
 	local compactLayout = false
-	-- A CanvasGroup faded to nothing still draws a faint ghost of itself, so the card is also hidden outright once it has
-	-- faded. The touch layout never shows it.
+	-- Once it has faded the card is hidden outright, so nothing of it catches clicks. The touch layout never shows it.
 	local function setHelp(visible: boolean)
 		helpShown = visible
 		if visible then
 			help.Visible = not compactLayout
 		end
-		TweenService:Create(help, TweenInfo.new(0.35), { GroupTransparency = if visible then 0 else 1 }):Play()
+		fadeHelp(visible)
 		if not visible then
 			task.delay(0.4, function()
 				if not helpShown then

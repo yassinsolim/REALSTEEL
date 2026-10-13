@@ -21,8 +21,8 @@ local WorldBuilder = require(script.Parent.WorldBuilder)
 local MENU_COOLDOWN = 0.2
 local NAME_LENGTH = 16
 
--- Robot models must be shared before the fighters exist, because clients draw them as soon as the fighters replicate.
-RobotLibrary.preload()
+-- The hall comes first, before anything that can wait. A live server is still starting up when its first player joins,
+-- and that player's character spawns as soon as they do: it must find the catwalk under it, not the void.
 local world = WorldBuilder.build()
 for _, ring in world.rings do
 	-- The clients number the rings the same way, from their Index attribute.
@@ -30,6 +30,8 @@ for _, ring in world.rings do
 	assert(index == ring.index, "rings must be added in order")
 end
 Simulation.start()
+-- The robot models download in the background. The clients wait for them (see RobotFrames) before they draw any robot.
+task.spawn(RobotLibrary.preload)
 
 -- The hall's state for the clients (see Rings).
 local state = Instance.new("Folder")

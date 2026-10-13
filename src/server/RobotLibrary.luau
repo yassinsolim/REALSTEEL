@@ -39,26 +39,40 @@ local function load(name: string, id: number): Folder?
 		end
 	end
 	model:Destroy()
-	if #template:GetChildren() == 0 then
+	local count = #template:GetChildren()
+	if count == 0 then
 		warn(string.format("[REALSTEEL] Robot %s (asset %d) has no meshes, using a blockout", name, id))
 		template:Destroy()
 		return nil
 	end
+	-- A client can see the folder before every mesh in it has arrived; this says when it is whole (see RobotFrames).
+	template:SetAttribute("Parts", count)
 	return template
 end
 
--- Yields while the models download.
+-- Yields while the models download, all of them at once.
 function RobotLibrary.preload()
 	local folder = Instance.new("Folder")
 	folder.Name = "Robots"
+	local pending = 0
+	local frames = 0
 	for name, entry in RobotAssets do
 		if entry.Id > 0 then
-			local template = load(name, entry.Id)
-			if template ~= nil then
-				template.Parent = folder
-			end
+			pending += 1
+			task.spawn(function()
+				local template = load(name, entry.Id)
+				if template ~= nil then
+					template.Parent = folder
+					frames += 1
+				end
+				pending -= 1
+			end)
 		end
 	end
+	while pending > 0 do
+		task.wait()
+	end
+	folder:SetAttribute("Frames", frames)
 	folder.Parent = ReplicatedStorage
 end
 

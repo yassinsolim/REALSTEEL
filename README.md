@@ -236,7 +236,8 @@ own blue and red, so the robots are always the most saturated thing on screen.
   card (YOU WIN / YOU LOSE, the score and the bot's level) with REMATCH and CHANGE MODE. When the view is wide enough (the
   same rule as the camera's slide, so a phone in landscape counts) the result card rests on the right under a light shade,
   beside the winner; on a narrower view it stays centered. Mouse, touch, keyboard and gamepad all work, and on a phone the
-  rows shrink and the one-line descriptions go away.
+  rows shrink and the one-line descriptions go away. The menu and the HUD's card of controls are plain frames that fade
+  piece by piece: a CanvasGroup is drawn at the player's graphics quality, so it blurs on lower settings.
 - **Sound** (`src/client/Sfx.luau`): punches, heavy hits, metal clanks on blocks, whooshes timed so their swell peaks as
   the strike lands, a boom and a crowd swell on a KO, a bell to start a round and to end it on time, and a crowd bed that
   rises with the action. Each sound is a free Creator Store asset (credits below); a variation and a slight pitch change are
@@ -316,8 +317,9 @@ fights' netcode. Three fights can run at once: the main ring and two practice pi
   four-sided screen hangs over the ring, and the hall's name is on the north wall. `Foundry.luau` builds it and
   `FoundryLayout` has the numbers.
 - **The pads.** Between the main ring and the catwalk stand six pads: the blue and red 1V1 pads facing each other across
-  the walkway with VS painted between them, three amber bot pads (EASY, MEDIUM, HARD) to the west and a teal TRAINING pad
-  to the east. Standing on one asks for its fight, no menu needed. The 1V1 pads count down from 3 once a different player
+  the walkway with VS painted between them, three amber bot pads to the west under one VS BOT sign, each with its level
+  (EASY, MEDIUM, HARD) in the PLAY card's colors, and a teal TRAINING pad to the east. Standing on one asks for its
+  fight, no menu needed. The 1V1 pads count down from 3 once a different player
   stands on each, then put the pair in line together: they fight each other, the blue pad's player in the first seat (the
   west booth). The bot and training pads start their player's fight after 2 seconds. Stepping off cancels; a countdown
   that has run out is done with its players, who can walk away while they wait, and the pads are free for the next. A pad
@@ -587,11 +589,15 @@ knuckle plates). The designs are original: robot boxers in general are fair game
   the key owner's account. Roblox loads a model only for experiences owned by the uploader or a group it is shared with.
   An ID of 0, or a model that fails to load, gives blockout robots built from the rig's part sizes, so a missing asset
   never breaks the game.
-- **Loading:** the server loads every frame's model once (`RobotLibrary`) and shares them as `ReplicatedStorage.Robots`;
-  `RobotFrames` gathers each frame's rig, meshes and textures on the client, which clones the meshes into its own parts
-  and moves them with `BulkMoveTo`. `RobotRig.setFrame` swaps a robot to another frame in place, keeping its size, crest,
-  paint and finish. The robots are client-only visuals, so nothing about them replicates. Script cost on desktop Studio:
-  about 3 microseconds to animate and 180 to solve and place one robot per frame.
+- **Loading:** the server builds the hall before anything that waits, then loads every frame's model once, all at the
+  same time (`RobotLibrary`), and shares them as `ReplicatedStorage.Robots`. Players can join while the models download,
+  and a character that spawned before the hall existed would fall out of the world. The folder can reach a client before
+  the meshes in it, so the server marks how many frames it holds and how many meshes each has, and `RobotFrames` waits
+  (up to two minutes) until they have all arrived. It then gathers each frame's rig, meshes and textures on the client,
+  which clones the meshes into its own parts and moves them with `BulkMoveTo`. `RobotRig.setFrame` swaps a robot to
+  another frame in place, keeping its size, crest, paint and finish. The robots are client-only visuals, so nothing about
+  them replicates. Script cost on desktop Studio: about 3 microseconds to animate and 180 to solve and place one robot
+  per frame.
 
 ## Tests
 

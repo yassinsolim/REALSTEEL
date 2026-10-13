@@ -399,11 +399,13 @@ local function sizeCard(card: Card, compact: boolean)
 end
 
 function Menu.new(gui: ScreenGui, send: (action: string, level: number?) -> (), openGarage: () -> ()): Menu
-	local root = Instance.new("CanvasGroup")
+	-- A plain frame, not a CanvasGroup: a CanvasGroup draws its contents into a texture whose quality follows the
+	-- player's graphics setting, which left the whole card blurry on lower settings. The shade fades instead, and the card
+	-- slides in.
+	local root = Instance.new("Frame")
 	root.Name = "Menu"
 	root.Size = UDim2.fromScale(1, 1)
 	root.BackgroundTransparency = 1
-	root.GroupTransparency = 1
 	root.Visible = false
 	root.ZIndex = 20
 	root.Parent = gui
@@ -413,7 +415,7 @@ function Menu.new(gui: ScreenGui, send: (action: string, level: number?) -> (), 
 	shade.Name = "Shade"
 	shade.Size = UDim2.fromScale(1, 1)
 	shade.BackgroundColor3 = Color3.fromRGB(2, 4, 12)
-	shade.BackgroundTransparency = SHADE_MENU
+	shade.BackgroundTransparency = 1
 	shade.BorderSizePixel = 0
 	shade.AutoButtonColor = false
 	shade.Text = ""
@@ -628,7 +630,7 @@ function Menu.new(gui: ScreenGui, send: (action: string, level: number?) -> (), 
 			other.frame.Visible = other == card
 		end
 		if card == nil then
-			TweenService:Create(root, TweenInfo.new(0.18), { GroupTransparency = 1 }):Play()
+			TweenService:Create(shade, TweenInfo.new(0.18), { BackgroundTransparency = 1 }):Play()
 			task.delay(0.2, function()
 				if shown == nil then
 					root.Visible = false
@@ -641,7 +643,6 @@ function Menu.new(gui: ScreenGui, send: (action: string, level: number?) -> (), 
 		fitCard(card)
 		local x = restX(card)
 		card.frame.Position = UDim2.fromScale(x, 0.56)
-		TweenService:Create(root, TweenInfo.new(0.22), { GroupTransparency = 0 }):Play()
 		TweenService
 			:Create(
 				shade,
