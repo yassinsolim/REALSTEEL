@@ -23,6 +23,18 @@ export type TrainingActions = {
 	toggle: InputAction,
 }
 
+-- Walking in the hall, for players whose Roblox player scripts do not send it to the server themselves (see HallWalk).
+-- Walk is the world direction (X and Z) the character wants to go, at most 1 long.
+export type HallActions = {
+	walk: InputAction,
+	jump: InputAction,
+}
+
+export type HallScripted = {
+	walk: InputBinding,
+	jump: InputBinding,
+}
+
 export type Scripted = {
 	move: InputBinding,
 	jab: InputBinding,
@@ -126,6 +138,14 @@ function InputSetup.build(player: Player)
 	addBinding(toggle, "Keyboard", Enum.KeyCode.P)
 	addBinding(toggle, "Gamepad", Enum.KeyCode.ButtonSelect)
 	training.Parent = player
+
+	-- No keys: the client fires both from Roblox's own controls every frame (see HallWalk), so walking keeps whatever
+	-- keys, thumbstick, touch or click to move the player has set.
+	local hall = Instance.new("InputContext")
+	hall.Name = "HallInputs"
+	addAction(hall, "Walk", Enum.InputActionType.Direction2D)
+	addAction(hall, "Jump", Enum.InputActionType.Bool)
+	hall.Parent = player
 end
 
 local function findAction(context: Instance, name: string): InputAction?
@@ -198,6 +218,32 @@ function InputSetup.findTraining(player: Player): TrainingActions?
 		return nil
 	end
 	return { next = next, reset = reset, toggle = toggle }
+end
+
+function InputSetup.findHall(player: Player): HallActions?
+	local context = player:FindFirstChild("HallInputs")
+	if context == nil then
+		return nil
+	end
+	local walk = findAction(context, "Walk")
+	local jump = findAction(context, "Jump")
+	if walk == nil or jump == nil then
+		return nil
+	end
+	return { walk = walk, jump = jump }
+end
+
+function InputSetup.findHallScripted(player: Player): HallScripted?
+	local context = player:FindFirstChild("HallInputs")
+	if context == nil then
+		return nil
+	end
+	local walk = findScriptedBinding(context, "Walk")
+	local jump = findScriptedBinding(context, "Jump")
+	if walk == nil or jump == nil then
+		return nil
+	end
+	return { walk = walk, jump = jump }
 end
 
 -- The Scriptable bindings used to drive the local player's actions from UI or tests.

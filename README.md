@@ -173,6 +173,17 @@ Server authority is enabled through `Workspace` properties in `default.project.j
   The server reads the training hotkeys of each ring's first seat itself.
 - Touch controls and tests drive actions with `InputBinding:Fire` on a Scriptable binding. `InputAction:Fire` is
   deprecated.
+- Characters walk through `HallWalk` (shared). With `PlayerScriptsUseInputActionSystem`, Roblox's newer player scripts
+  carry each character's movement to the server through input actions of their own (`Player.InputContexts`), but they
+  live under `StarterPlayer`, where Studio puts them; the place this repository builds and publishes never has them. A
+  live server then runs the classic player scripts, which move the character on its own client only, so the server held
+  it at the spawn and kept correcting the client back. `HallWalk` carries Roblox's controls through the player's own
+  `HallInputs` instead: the client fires `Walk` (a world direction) and `Jump` every frame from the classic
+  `ControlModule`, and a function bound to the simulation on the server (every player) and the client (its own) turns them
+  into `Humanoid:Move` and `Humanoid.Jump`, as Roblox's own `InputReplication` does. It leaves alone any player who has
+  Roblox's `CharacterContext` (every Studio test), and looks the humanoid and actions up outside the simulation. It sends
+  no facing, so the hall's camera has no first person or shift lock (`CameraMinZoomDistance` 3, `EnableMouseLockOption`
+  off in both project files): either would turn the character toward the camera on its own client only.
 
 ## Look and feel
 
@@ -775,14 +786,15 @@ Not covered yet: touching the stick and a button at the same time (mouse injecti
 (Studio's key injection sends the gamepad buttons as keyboard events, which the gamepad bindings ignore, so it needs a
 real controller), real-device performance, and the one or two predicted hits per 30 seconds that the server later retracts.
 
-**Connection probe.** Studio steps its server and client together, so it never shows a client falling behind a live
-server. For the place's owner only, `NetProbe` (a client and a server script) measures that on a real server: frame
-hitches, the engine's rollbacks, every jump of the local character, how far it got while trying to walk against how far
-the server's copy of it got, and the server's frame rate. Once a second the server also sends the owner's client its own
-view of the owner: their input contexts with every action's state, and their character's physics and humanoid state
-(`ProbeText` formats both sides alike). The client prints `[REALSTEEL][probe]` lines to its log
-(`%LOCALAPPDATA%\Roblox\logs` on Windows) every two seconds while anything happens, and keeps a one-line readout in the
-bottom left corner. Other players run nothing.
+**Connection probe.** A live server can behave differently from Studio, which steps its server and client together and
+adds Roblox's newer player scripts (see `HallWalk`); this is how the walking in the hall was found to be broken on live
+servers. For the place's owner only, `NetProbe` (a client and a server script) measures a real server: frame hitches,
+the engine's rollbacks, every jump of the local character, how far it got while trying to walk against how far the
+server's copy of it got, and the server's frame rate. Once a second the server also sends the owner's client its own view
+of the owner: their input contexts with every action's state, their character's physics and humanoid state, and whether
+`HallWalk` or Roblox's player scripts walk it (`ProbeText` formats both sides alike). The client prints
+`[REALSTEEL][probe]` lines to its log (`%LOCALAPPDATA%\Roblox\logs` on Windows) every two seconds while anything happens,
+and keeps a one-line readout in the bottom left corner. Other players run nothing.
 
 ## Next steps
 

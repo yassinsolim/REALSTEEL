@@ -21,6 +21,7 @@ local FightConfig = require(Shared:WaitForChild("FightConfig"))
 local FightSim = require(Shared:WaitForChild("FightSim"))
 local FoundryLayout = require(Shared:WaitForChild("FoundryLayout"))
 local FrameData = require(Shared:WaitForChild("FrameData"))
+local HallWalk = require(Shared:WaitForChild("HallWalk"))
 local Hoist = require(Shared:WaitForChild("Hoist"))
 local InputSetup = require(Shared:WaitForChild("InputSetup"))
 local Loadout = require(Shared:WaitForChild("Loadout"))
@@ -105,6 +106,32 @@ local function waitForCamera(): Camera
 	end
 	return current :: Camera
 end
+
+-- Walking starts at once, before anything below waits (see HallWalk); nothing below depends on it. Roblox's controls
+-- come from its player scripts; they rest while a card is up, the garage is open or the player is in a ring, so the keys
+-- that pick an entry or throw a punch do not also walk the character around.
+local walkFeed: HallWalk.Feed? = nil
+local walking, walkingError = pcall(function()
+	HallWalk.start()
+	walkFeed = HallWalk.feed()
+end)
+if not walking then
+	warn("[REALSTEEL] Walking in the hall could not start: " .. tostring(walkingError))
+end
+local controls: any = nil
+task.spawn(function()
+	local load: (module: any) -> any = require :: any
+	local ok, module = pcall(function()
+		return load(player:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule", 20))
+	end)
+	if ok and module ~= nil then
+		controls = module:GetControls()
+		local feed = walkFeed
+		if feed ~= nil then
+			feed.setControls(controls)
+		end
+	end
+end)
 
 local ringsFolder = Workspace:WaitForChild("Rings")
 
@@ -348,18 +375,6 @@ UserInputService.InputBegan:Connect(function(input: InputObject, processed: bool
 	end
 end)
 
--- The character's own controls rest while a card or the garage is up and while the player is in a ring, so the keys
--- that pick an entry or throw a punch do not also walk the character around.
-local controls: any = nil
-task.spawn(function()
-	local load: (module: any) -> any = require :: any
-	local ok, module = pcall(function()
-		return load(player:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule", 20))
-	end)
-	if ok and module ~= nil then
-		controls = module:GetControls()
-	end
-end)
 local controlsOn = true
 local function setControls(on: boolean)
 	if on == controlsOn or controls == nil then

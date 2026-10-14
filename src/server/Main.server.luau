@@ -8,6 +8,7 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
+local HallWalk = require(ReplicatedStorage.Shared.HallWalk)
 local InputSetup = require(ReplicatedStorage.Shared.InputSetup)
 local Simulation = require(ReplicatedStorage.Shared.Simulation)
 local Garage = require(script.Parent.Garage)
@@ -30,6 +31,11 @@ for _, ring in world.rings do
 	assert(index == ring.index, "rings must be added in order")
 end
 Simulation.start()
+-- Characters walk where the server hears their players' controls (see HallWalk). Nothing below depends on it.
+local walking, walkingError = pcall(HallWalk.start)
+if not walking then
+	warn("[REALSTEEL] Walking in the hall could not start: " .. tostring(walkingError))
+end
 -- The robot models download in the background. The clients wait for them (see RobotFrames) before they draw any robot.
 task.spawn(RobotLibrary.preload)
 

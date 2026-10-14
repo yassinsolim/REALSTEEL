@@ -10,6 +10,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
+local HallWalk = require(ReplicatedStorage.Shared.HallWalk)
 local ProbeText = require(ReplicatedStorage.Shared.ProbeText)
 
 local ROOT_EVERY = 0.1
@@ -37,11 +38,11 @@ local function view(player: Player): string
 		end)
 	end
 	return string.format(
-		"v%d  %s  owner %s  integrity %s  | %s",
+		"v%d  %s  owner %s  walking by %s  | %s",
 		game.PlaceVersion,
 		ProbeText.character(character),
 		owner,
-		Workspace.StreamingIntegrityMode.Name,
+		if HallWalk.engineDrives(player) then "Roblox's player scripts" else "HallWalk",
 		ProbeText.inputs(player)
 	)
 end

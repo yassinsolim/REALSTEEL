@@ -21,6 +21,7 @@ then
 end
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local HallWalk = require(Shared:WaitForChild("HallWalk"))
 local ProbeText = require(Shared:WaitForChild("ProbeText"))
 local Simulation = require(Shared:WaitForChild("Simulation"))
 local state = ReplicatedStorage:WaitForChild("FoundryState")
@@ -190,8 +191,14 @@ RunService.Heartbeat:Connect(function(deltaTime: number)
 		local trying = intent.Magnitude > 0.1
 		if trying then
 			walkedLately = true
-			if window.clientView == nil then
-				window.clientView = ProbeText.character(character) .. "  | " .. ProbeText.inputs(player)
+			-- A moment into the walk, once the input it fired has reached the actions.
+			if window.clientView == nil and window.walking >= 0.3 then
+				window.clientView = string.format(
+					"%s  walking by %s  | %s",
+					ProbeText.character(character),
+					if HallWalk.engineDrives(player) then "Roblox's player scripts" else "HallWalk",
+					ProbeText.inputs(player)
+				)
 			end
 		end
 		local previous = lastPosition
