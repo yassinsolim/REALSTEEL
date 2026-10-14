@@ -21,10 +21,15 @@ local FoundryStations = {}
 local TEAL = Color3.fromRGB(64, 214, 232)
 local AMBER = Color3.fromRGB(255, 178, 66)
 local MUTED = Color3.fromRGB(140, 154, 184)
-local STEEL = Color3.fromRGB(46, 51, 66)
-local PANEL = Color3.fromRGB(30, 33, 42)
+local STEEL = Color3.fromRGB(80, 86, 100)
+local PANEL = Color3.fromRGB(50, 54, 64)
 local DARK = Color3.fromRGB(14, 16, 22)
 local LAMP = Color3.fromRGB(255, 226, 190)
+local WASH = Color3.fromRGB(170, 196, 232)
+-- The pads' glow rings: the bot pads' amber and training's teal a step down from the hall's accent colors, so a ring of
+-- light on the floor guides the eye without glaring.
+local PAD_AMBER = Color3.fromRGB(204, 124, 46)
+local PAD_TEAL = Color3.fromRGB(58, 190, 208)
 local TEAM_BLUE = Color3.fromRGB(70, 140, 255)
 local TEAM_RED = Color3.fromRGB(255, 84, 70)
 local FLOOR_PAINT = Color3.fromRGB(36, 38, 44)
@@ -51,7 +56,14 @@ local function buildBay(model: Model, index: number): Bay
 	folder:SetAttribute("BayIndex", index)
 	folder.Parent = model
 
-	Build.solid(folder, "Back", Vector3.new(1, 17, 10.4), CFrame.new(wall + 0.5, 8.5, z), PANEL, Enum.Material.Metal)
+	Build.solid(
+		folder,
+		"Back",
+		Vector3.new(1, 17, 10.4),
+		CFrame.new(wall + 0.5, 8.5, z),
+		PANEL,
+		Enum.Material.SmoothPlastic
+	)
 	Build.decor(folder, "Accent", Vector3.new(0.2, 0.3, 9), CFrame.new(wall + 1.1, 15.5, z), TEAL, Enum.Material.Neon)
 	local numberPlate = Build.decor(
 		folder,
@@ -69,8 +81,8 @@ local function buildBay(model: Model, index: number): Bay
 		"Lift",
 		Vector3.new(FoundryLayout.LiftTop, 6.4, 6.4),
 		CFrame.new(x, FoundryLayout.LiftTop / 2, z) * CFrame.Angles(0, 0, math.rad(90)),
-		Color3.fromRGB(56, 62, 76),
-		Enum.Material.Metal,
+		Color3.fromRGB(70, 76, 90),
+		Enum.Material.DiamondPlate,
 		Enum.PartType.Cylinder
 	)
 	Build.decor(
@@ -78,7 +90,7 @@ local function buildBay(model: Model, index: number): Bay
 		"LiftRim",
 		Vector3.new(0.3, 6.75, 6.75),
 		CFrame.new(x, 0.15, z) * CFrame.Angles(0, 0, math.rad(90)),
-		AMBER,
+		PAD_AMBER,
 		Enum.Material.Neon,
 		Enum.PartType.Cylinder
 	)
@@ -147,6 +159,26 @@ local function buildBay(model: Model, index: number): Bay
 	spot.Shadows = false
 	spot.Parent = lamp
 
+	-- A soft cool wash up the back panel, so each bay reads as a lit garage rather than a black hole behind the robot.
+	local washAt = Vector3.new(wall + 2.4, 1.2, z)
+	local wash = Build.decor(
+		folder,
+		"Wash",
+		Vector3.one * 0.3,
+		CFrame.lookAt(washAt, Vector3.new(wall + 0.8, 11, z)),
+		DARK,
+		Enum.Material.SmoothPlastic
+	)
+	wash.Transparency = 1
+	local washLight = Instance.new("SpotLight")
+	washLight.Face = Enum.NormalId.Front
+	washLight.Angle = 80
+	washLight.Range = 18
+	washLight.Brightness = 1.2
+	washLight.Color = WASH
+	washLight.Shadows = false
+	washLight.Parent = wash
+
 	return { index = index, lift = lift, nameplate = nameplate }
 end
 
@@ -163,8 +195,8 @@ function FoundryStations.buildBays(model: Model): { Bay }
 			"Divider",
 			Vector3.new(1.6, FoundryLayout.Height, 1.6),
 			CFrame.new(DIVIDER_X, FoundryLayout.Height / 2, z),
-			Color3.fromRGB(40, 44, 56),
-			Enum.Material.Metal
+			Color3.fromRGB(70, 74, 86),
+			Enum.Material.SmoothPlastic
 		)
 		Build.decor(
 			model,
@@ -197,14 +229,14 @@ function FoundryStations.buildPads(model: Model): { [string]: Part }
 		local position = pad.position
 		local color = if pad.kind == "versus"
 			then (if pad.seat == 1 then TEAM_BLUE else TEAM_RED)
-			elseif pad.kind == "bot" then AMBER
-			else TEAL
+			elseif pad.kind == "bot" then PAD_AMBER
+			else PAD_TEAL
 		local radius = FoundryLayout.PadRadius
 		-- Opaque, like every glow under a cover (see Build.ringLine).
 		Build.disc(
 			model,
 			"PadGlow" .. pad.name,
-			radius + 0.35,
+			radius + 0.25,
 			0.06,
 			0.04,
 			color,
@@ -218,8 +250,8 @@ function FoundryStations.buildPads(model: Model): { [string]: Part }
 			radius,
 			0.08,
 			0.06,
-			Color3.fromRGB(40, 44, 56),
-			Enum.Material.Metal,
+			Color3.fromRGB(66, 70, 82),
+			Enum.Material.SmoothPlastic,
 			position.X,
 			position.Z
 		)

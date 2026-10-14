@@ -197,12 +197,21 @@ own blue and red, so the robots are always the most saturated thing on screen.
   (`FightConfig.RingFadeTag`), and the client fades the ones between the camera and the fighters.
 - **Stage lights** (`src/client/StageLights.luau`): a shadow-casting key light above the pair, a rim light behind each
   fighter in its team color, and a soft fill at the camera. They follow the fighters, so the lights are part of the fight
-  rather than part of the building. Nothing in the building casts light.
+  rather than part of the building. The hall's own lights cast no shadows.
 - **Lighting** (`default.project.json`): Future technology, bloom, color correction, depth of field, atmosphere, and no
   sky texture. Rules learned the hard way:
   - Future lighting is physically based. Near-black surfaces never show, big bright Neon surfaces wash the robots out, and
     a light's strength falls with the square of the distance. The stands are therefore mid-dark blue Neon with near-black
     people on them, so the crowd reads as silhouettes.
+  - The Metal material shows only reflections, and in a closed hall at night there is nothing bright to reflect, so a metal
+    wall reads as black however it is lit. The hall's big surfaces are concrete and painted steel; Metal is left to
+    girders, rails and trim, where dark is fine.
+  - `Lighting.Ambient` barely registers below about 0.5 under Future (0.26 left the floor near black). The hall is lit
+    like a room instead: hanging lamps throw wide pools of warm light down onto the floor, a cool wash rises up the walls
+    from the foot of every column and bay, and Neon is kept to thin accents (lines, rings, embers), with bloom only past a
+    high threshold. The lobby used to be near-black with large saturated Neon bands across it, which was tiring to look at.
+  - A light's `Face` is in its part's own axes: the lamps hang from cylinders turned onto their side, so they shine from
+    the Left face, which points down.
   - Devices that cannot run Future fall back to ShadowMap, which needs about 40% of the light for the same look.
     A script cannot read `Lighting.Technology`, so the light strengths are a compromise: slightly dark in Future and
     slightly bright in the fallback.
@@ -214,8 +223,11 @@ own blue and red, so the robots are always the most saturated thing on screen.
   over a few seconds). The server tags the parts (`FightConfig.RibbonTag`, `CrowdLightTag`), the client recolors them a few
   times a second.
 - **Effects** (`src/client/Effects.luau`): flash, shock ring and sparks on hits, blocks and the KO, dust on dashes, strike
-  trails on the limb that is actually throwing the move, a brief screen flash and a push-in of the camera on every hit,
-  and a camera shake value. The shock ring is a circle outline that always faces the camera; a flat disc facing the
+  trails on the limb that is actually throwing the move, a brief screen flash and a push-in of the camera on every hit in
+  the player's own fight (never for someone else's: the bots' exhibition in the main ring never stops, and flashing the
+  hall's screen for each of its hits kept the lobby flickering), and a camera shake value. Seated in a ring, the color
+  grade, bloom and depth of field blend toward a punchier fight look over a fraction of a second, and back to the hall's
+  calm settings on leaving. The shock ring is a circle outline that always faces the camera; a flat disc facing the
   attacker is edge-on to the broadside camera and showed up as a slab cutting through both robots. They are triggered by
   rendered state changes (a fighter's hitstop starting) with a short per-slot cooldown so a rollback cannot fire one
   twice, and they clean themselves up. A predicted hit that the server later retracts can still flash once. The opponent
@@ -322,11 +334,12 @@ avatars. Roblox's server authority keeps characters server-owned and predicted, 
 fights' netcode. Three fights can run at once: the main ring and two practice pits.
 
 - **The hall.** You spawn on a catwalk along the south wall that looks over everything; stairs at both ends lead down. The
-  main ring stands in the middle on an island ringed by a loop of molten channel under grates, behind a rail with an LED
-  line that runs with the crowd's excitement. An invisible wall behind the rail keeps characters out of the fight camera's
-  way. Beside the ring are the two operators' booths, the pads face the catwalk in front of it (see below), a
-  four-sided screen hangs over the ring, and the hall's name is on the north wall. `Foundry.luau` builds it and
-  `FoundryLayout` has the numbers.
+  main ring stands in the middle on an island ringed by a loop of molten channel (embers glowing through a close grate
+  over a bed of cracked lava), behind a rail with an LED line that runs with the crowd's excitement. An invisible wall
+  behind the rail keeps characters out of the fight camera's way. Beside the ring are the two operators' booths, the pads
+  face the catwalk in front of it (see below), a four-sided screen hangs over the ring, and the hall's name is on the
+  north wall. Warm lamps hang over the walkways and a cool wash lights the walls (see Lighting). `Foundry.luau` builds it
+  and `FoundryLayout` has the numbers.
 - **The pads.** Between the main ring and the catwalk stand six pads: the blue and red 1V1 pads facing each other across
   the walkway with VS painted between them, three amber bot pads to the west under one VS BOT sign, each with its level
   (EASY, MEDIUM, HARD) in the PLAY card's colors, and a teal TRAINING pad to the east. Standing on one asks for its
@@ -803,7 +816,7 @@ and keeps a one-line readout in the bottom left corner. Other players run nothin
    and `FightConfig` as it feels.
 2. Try it on a phone and with a friend on the published test place. Check that the robots read well on a small screen and run
    well on a real device (about 100 anchored mesh parts move every frame in each ring, three rings' robots are drawn at
-   once, up to eight robots idle in the bays, and the hall is about 1,700 parts and 33 lights under Future lighting). If a
+   once, up to eight robots idle in the bays, and the hall is about 2,000 instances and 64 lights under Future lighting). If a
    phone struggles, the bay robots are the first thing to thin out (`ANIMATE_RADIUS` and `OTHERS_PER_FRAME` in
    `Bays.luau`), then the robots in rings the player is far from.
 3. Decide the roster theme and the game's original name (do not use Tekken or Real Steel names, characters or moves). The

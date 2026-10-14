@@ -458,11 +458,27 @@ for _, instance in CollectionService:GetTagged(FightConfig.RingFadeTag) do
 end
 CollectionService:GetInstanceAddedSignal(FightConfig.RingFadeTag):Connect(trackFade)
 
--- Screen flashes ride on the post effects the place already has.
+-- Screen flashes ride on the post effects the place already has. The place's settings are the hall's calm look; a fight
+-- blends toward a punchier one (more contrast and color, the hall behind the fighters out of focus) and back when the
+-- player leaves the ring.
 local grade = Lighting:FindFirstChild("ColorGrade")
 local bloom = Lighting:FindFirstChild("Bloom")
+local depth = Lighting:FindFirstChild("Depth")
 local gradeBrightness = if grade ~= nil and grade:IsA("ColorCorrectionEffect") then grade.Brightness else 0
 local bloomIntensity = if bloom ~= nil and bloom:IsA("BloomEffect") then bloom.Intensity else 0
+local hallLook: { [string]: number } = {
+	contrast = if grade ~= nil and grade:IsA("ColorCorrectionEffect") then grade.Contrast else 0,
+	saturation = if grade ~= nil and grade:IsA("ColorCorrectionEffect") then grade.Saturation else 0,
+	bloom = bloomIntensity,
+	farBlur = if depth ~= nil and depth:IsA("DepthOfFieldEffect") then depth.FarIntensity else 0,
+	focus = if depth ~= nil and depth:IsA("DepthOfFieldEffect") then depth.FocusDistance else 0,
+	inFocus = if depth ~= nil and depth:IsA("DepthOfFieldEffect") then depth.InFocusRadius else 0,
+}
+local FIGHT_LOOK: { [string]: number } =
+	{ contrast = 0.12, saturation = 0.08, bloom = 0.24, farBlur = 0.3, focus = 18, inFocus = 14 }
+-- How quickly the look follows the player into and out of a ring, per second.
+local LOOK_RATE = 2.5
+local fightLook = 0
 
 local function materialOf(name: string): Enum.Material
 	local item = Enum.Material:FromName(name)
@@ -806,20 +822,25 @@ RunService.RenderStepped:Connect(function(deltaTime: number)
 	lightPositions[2] = FighterView.groundPoint(mainRing.views[2])
 	StageLights.update(stageLights, lightPositions, position)
 
-	-- Impacts flash the screen: the player's own fight in full, the others a little, fading with distance.
-	local flash = 0
-	if mine ~= nil then
-		flash = mine.effects.flash
-	else
-		for _, ring in rings do
-			flash = math.max(flash, ring.effects.flash * 0.4 * presenceOf(ring, nil, position))
-		end
+	-- Impacts flash the screen in the player's own fight only: from the hall the bots' exhibition never stops, and a
+	-- flash for every heavy hit there kept the whole lobby flickering.
+	local flash = if mine ~= nil then mine.effects.flash else 0
+	fightLook = math.clamp(fightLook + (if mine ~= nil then 1 else -1) * LOOK_RATE * deltaTime, 0, 1)
+	local function look(key: string): number
+		return hallLook[key] + (FIGHT_LOOK[key] - hallLook[key]) * fightLook
 	end
 	if grade ~= nil and grade:IsA("ColorCorrectionEffect") then
 		grade.Brightness = gradeBrightness + flash * 0.3
+		grade.Contrast = look("contrast")
+		grade.Saturation = look("saturation")
 	end
 	if bloom ~= nil and bloom:IsA("BloomEffect") then
-		bloom.Intensity = bloomIntensity + flash * 0.7
+		bloom.Intensity = look("bloom") + flash * 0.7
+	end
+	if depth ~= nil and depth:IsA("DepthOfFieldEffect") then
+		depth.FarIntensity = look("farBlur")
+		depth.FocusDistance = look("focus")
+		depth.InFocusRadius = look("inFocus")
 	end
 	arenaFx.setExcitement(excitementOf(mainRing))
 	sfx.volume = presenceOf(focus, mine, position)

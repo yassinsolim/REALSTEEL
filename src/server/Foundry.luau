@@ -26,17 +26,27 @@ export type Hall = {
 local Foundry = {}
 
 local TEAL = Color3.fromRGB(64, 214, 232)
+-- Teal for lines that should read without glowing at the player: painted markings and the thin wall line.
+local TEAL_SOFT = Color3.fromRGB(70, 150, 162)
 local AMBER = Color3.fromRGB(255, 178, 66)
 local TEAM_BLUE = Color3.fromRGB(70, 140, 255)
 local TEAM_RED = Color3.fromRGB(255, 84, 70)
-local MOLTEN = Color3.fromRGB(255, 96, 20)
-local FLOOR = Color3.fromRGB(36, 38, 44)
-local WALL = Color3.fromRGB(26, 29, 36)
-local GIRDER = Color3.fromRGB(34, 38, 48)
-local STEEL = Color3.fromRGB(46, 51, 66)
-local HANDRAIL = Color3.fromRGB(96, 102, 118)
+-- Deep enough that the channels smoulder under their grates rather than flood the floor with orange.
+local MOLTEN = Color3.fromRGB(196, 62, 18)
+local LAVA = Color3.fromRGB(255, 120, 40)
+-- The hall's surfaces are mid grays rather than near black, so the lamps have something to light: the eye adjusts to a
+-- lit room, not to a black one with glowing lines in it.
+local FLOOR = Color3.fromRGB(74, 76, 82)
+local WALL = Color3.fromRGB(56, 60, 68)
+local ROOF = Color3.fromRGB(34, 36, 42)
+local GIRDER = Color3.fromRGB(64, 68, 78)
+local STEEL = Color3.fromRGB(86, 92, 106)
+local GRATE = Color3.fromRGB(52, 54, 60)
+local HANDRAIL = Color3.fromRGB(110, 116, 130)
 local DARK = Color3.fromRGB(14, 16, 22)
-local LAMP = Color3.fromRGB(255, 214, 170)
+local LAMP = Color3.fromRGB(255, 222, 186)
+-- The walls' wash: cool, against the lamps' warm pools on the floor.
+local WASH = Color3.fromRGB(170, 196, 232)
 
 local LAYOUT = FoundryLayout
 local MID_X = (LAYOUT.West + LAYOUT.East) / 2
@@ -60,6 +70,20 @@ local function lightPoint(model: Model, position: Vector3): Part
 	return part
 end
 
+-- A soft cool light low down, aimed up the wall it stands in front of (`towardWall` points at the wall).
+local function wallWash(model: Model, at: Vector3, towardWall: Vector3)
+	local anchor = lightPoint(model, at)
+	anchor.CFrame = CFrame.lookAt(at, at + towardWall * 1.2 + Vector3.yAxis * 3)
+	local spot = Instance.new("SpotLight")
+	spot.Face = Enum.NormalId.Front
+	spot.Angle = 70
+	spot.Range = 22
+	spot.Brightness = 1.3
+	spot.Color = WASH
+	spot.Shadows = false
+	spot.Parent = anchor
+end
+
 local function buildShell(model: Model)
 	local height = LAYOUT.Height
 	Build.solid(
@@ -76,31 +100,34 @@ local function buildShell(model: Model)
 		{ Vector3.new(SPAN_X + 4, height, 2), Vector3.new(MID_X, height / 2, LAYOUT.North - 1) },
 		{ Vector3.new(SPAN_X + 4, height, 2), Vector3.new(MID_X, height / 2, LAYOUT.South + 1) },
 	}
+	-- Concrete, not Metal: in Future lighting a metal surface shows only reflections, and with nothing bright to reflect the
+	-- walls of a closed hall read as black however they are lit.
 	for _, wall in walls do
-		Build.solid(model, "Wall", wall[1], CFrame.new(wall[2]), WALL, Enum.Material.Metal)
+		Build.solid(model, "Wall", wall[1], CFrame.new(wall[2]), WALL, Enum.Material.Concrete)
 	end
 	Build.solid(
 		model,
 		"Roof",
 		Vector3.new(SPAN_X + 4, 1, SPAN_Z + 4),
 		CFrame.new(MID_X, height + 0.5, MID_Z),
-		DARK,
+		ROOF,
 		Enum.Material.Metal
 	)
-	-- A teal line along the walls at head height and a little above.
+	-- A thin teal line along the walls a little above head height: a guide for the eye, not a light.
 	local stripe = 9
 	for _, line in
 		{
-			{ Vector3.new(0.2, 0.3, SPAN_Z), Vector3.new(LAYOUT.West + 0.15, stripe, MID_Z) },
-			{ Vector3.new(0.2, 0.3, SPAN_Z), Vector3.new(LAYOUT.East - 0.15, stripe, MID_Z) },
-			{ Vector3.new(SPAN_X, 0.3, 0.2), Vector3.new(MID_X, stripe, LAYOUT.North + 0.15) },
+			{ Vector3.new(0.2, 0.16, SPAN_Z), Vector3.new(LAYOUT.West + 0.15, stripe, MID_Z) },
+			{ Vector3.new(0.2, 0.16, SPAN_Z), Vector3.new(LAYOUT.East - 0.15, stripe, MID_Z) },
+			{ Vector3.new(SPAN_X, 0.16, 0.2), Vector3.new(MID_X, stripe, LAYOUT.North + 0.15) },
 		}
 	do
-		local part = Build.decor(model, "Stripe", line[1], CFrame.new(line[2]), TEAL, Enum.Material.Neon)
-		part.Transparency = 0.25
+		local part = Build.decor(model, "Stripe", line[1], CFrame.new(line[2]), TEAL_SOFT, Enum.Material.Neon)
+		part.Transparency = 0.45
 	end
 
-	-- Columns along the east and north walls (the west side's are the bay dividers), with caution-painted feet.
+	-- Columns along the east and north walls (the west side's are the bay dividers), painted steel with caution-painted
+	-- feet. A soft cool light at the foot of each washes up the wall behind it, so the walls read as walls instead of black.
 	local width = LAYOUT.ColumnWidth
 	for _, at in LAYOUT.columns() do
 		Build.solid(
@@ -108,8 +135,8 @@ local function buildShell(model: Model)
 			"Column",
 			Vector3.new(width, height, width),
 			CFrame.new(at.X, height / 2, at.Z),
-			GIRDER,
-			Enum.Material.Metal
+			Color3.fromRGB(70, 74, 86),
+			Enum.Material.SmoothPlastic
 		)
 		Build.decor(
 			model,
@@ -119,6 +146,8 @@ local function buildShell(model: Model)
 			AMBER,
 			Enum.Material.SmoothPlastic
 		)
+		local towardWall = if at.Z <= LAYOUT.North + 2 then -Vector3.zAxis else Vector3.xAxis
+		wallWash(model, Vector3.new(at.X, 1.4, at.Z) - towardWall * 1.6, towardWall)
 	end
 
 	-- Girders across the roof: a top and a bottom chord with posts between them.
@@ -154,7 +183,9 @@ local function buildShell(model: Model)
 		end
 	end
 
-	-- Warm lamps hanging over the walkways, away from the rings' own lights.
+	-- Warm industrial lamps hanging over the walkways, away from the rings' own lights. Each throws a wide pool of light
+	-- down onto the floor (lamps this high with only a bulb's glow light the roof and leave the floor black), and the
+	-- bulb's own soft glow lights the shade and the girders around it.
 	for _, at in
 		{
 			Vector2.new(-46, -30),
@@ -170,12 +201,12 @@ local function buildShell(model: Model)
 		}
 	do
 		local x, z = at.X, at.Y
-		Build.bar(model, "LampCable", Vector3.new(x, height, z), Vector3.new(x, 25, z), 0.12, DARK, Enum.Material.Metal)
+		Build.bar(model, "LampCable", Vector3.new(x, height, z), Vector3.new(x, 21, z), 0.12, DARK, Enum.Material.Metal)
 		Build.decor(
 			model,
 			"LampShade",
-			Vector3.new(1.2, 3.2, 3.2),
-			CFrame.new(x, 24.6, z) * CFrame.Angles(0, 0, math.rad(90)),
+			Vector3.new(1.4, 4.2, 4.2),
+			CFrame.new(x, 20.6, z) * CFrame.Angles(0, 0, math.rad(90)),
 			GIRDER,
 			Enum.Material.Metal,
 			Enum.PartType.Cylinder
@@ -183,17 +214,29 @@ local function buildShell(model: Model)
 		local bulb = Build.decor(
 			model,
 			"LampBulb",
-			Vector3.one * 1.1,
-			CFrame.new(x, 23.9, z),
+			Vector3.new(0.12, 3.4, 3.4),
+			CFrame.new(x, 19.86, z) * CFrame.Angles(0, 0, math.rad(90)),
 			LAMP,
 			Enum.Material.Neon,
-			Enum.PartType.Ball
+			Enum.PartType.Cylinder
 		)
-		light(bulb, "PointLight", 30, 1.3, LAMP)
+		bulb.Transparency = 0.15
+		-- The bulb is a cylinder turned onto its side, so its Left face (-X) is the one pointing down.
+		local pool = Instance.new("SpotLight")
+		pool.Face = Enum.NormalId.Left
+		pool.Angle = 120
+		pool.Range = 34
+		pool.Brightness = 2.4
+		pool.Color = LAMP
+		pool.Shadows = false
+		pool.Parent = bulb
+		light(bulb, "PointLight", 9, 0.6, LAMP)
 	end
 end
 
--- A strip of molten metal along one side of the loop, under a grate, between two curbs.
+-- A strip of molten metal along one side of the loop, under a close grate, between two curbs: a bed of cracked lava with a
+-- narrow glowing core, so only embers show between the bars and the loop smoulders around the island instead of reading
+-- as a band of light.
 local function buildChannel(model: Model, from: Vector2, to: Vector2)
 	local alongX = from.Y == to.Y
 	local length = (to - from).Magnitude
@@ -203,30 +246,38 @@ local function buildChannel(model: Model, from: Vector2, to: Vector2)
 	Build.decor(
 		model,
 		"Molten",
-		Vector3.new(length + 2.4, 0.06, 2.4),
+		Vector3.new(length + 1.6, 0.06, 1.6),
 		base * CFrame.new(0, 0.03, 0),
+		LAVA,
+		Enum.Material.CrackedLava
+	)
+	Build.decor(
+		model,
+		"MoltenCore",
+		Vector3.new(length + 1.6, 0.06, 0.5),
+		base * CFrame.new(0, 0.05, 0),
 		MOLTEN,
 		Enum.Material.Neon
 	)
-	for _, side in { -1.4, 1.4 } do
+	for _, side in { -1, 1 } do
 		Build.decor(
 			model,
 			"Curb",
-			Vector3.new(length + 2.8, 0.18, 0.35),
+			Vector3.new(length + 2, 0.18, 0.4),
 			base * CFrame.new(0, 0.09, side),
-			DARK,
+			GRATE,
 			Enum.Material.Metal
 		)
 	end
-	local count = math.floor(length / 1.6)
+	local count = math.floor(length / 0.95)
 	for index = 0, count do
 		Build.decor(
 			model,
 			"Grate",
-			Vector3.new(0.25, 0.14, 2.6),
+			Vector3.new(0.5, 0.14, 1.9),
 			base * CFrame.new(-length / 2 + index * length / count, 0.1, 0),
-			DARK,
-			Enum.Material.Metal
+			GRATE,
+			Enum.Material.DiamondPlate
 		)
 	end
 	-- The glow spills onto the floor around it.
@@ -234,7 +285,7 @@ local function buildChannel(model: Model, from: Vector2, to: Vector2)
 	for index = 1, lights do
 		local t = (index - 0.5) / lights
 		local point = from:Lerp(to, t)
-		light(lightPoint(model, Vector3.new(point.X, 0.8, point.Y)), "PointLight", 14, 1.8, MOLTEN)
+		light(lightPoint(model, Vector3.new(point.X, 0.8, point.Y)), "PointLight", 12, 1.1, MOLTEN)
 	end
 end
 
@@ -470,15 +521,26 @@ local function buildJumbotron(model: Model)
 		face:SetAttribute("JumbotronFace", index)
 	end
 	for _, y in { center.Y - height / 2, center.Y + height / 2 } do
-		local rim = Build.decor(
-			model,
-			"JumbotronRim",
-			Vector3.new(width + 0.2, 0.18, width + 0.2),
-			CFrame.new(center.X, y, center.Z),
-			TEAL,
-			Enum.Material.Neon
-		)
-		rim.Transparency = 0.2
+		-- A thin frame along the edges, not a slab: from below a solid plate of light is all the screen would be.
+		local edge = width + 0.2
+		for _, bar in
+			{
+				{ Vector3.new(edge, 0.18, 0.18), Vector3.new(0, 0, edge / 2) },
+				{ Vector3.new(edge, 0.18, 0.18), Vector3.new(0, 0, -edge / 2) },
+				{ Vector3.new(0.18, 0.18, edge), Vector3.new(edge / 2, 0, 0) },
+				{ Vector3.new(0.18, 0.18, edge), Vector3.new(-edge / 2, 0, 0) },
+			}
+		do
+			local rim = Build.decor(
+				model,
+				"JumbotronRim",
+				bar[1],
+				CFrame.new(Vector3.new(center.X, y, center.Z) + bar[2]),
+				TEAL,
+				Enum.Material.Neon
+			)
+			rim.Transparency = 0.2
+		end
 	end
 	for _, corner in { Vector2.new(-1, -1), Vector2.new(1, -1), Vector2.new(1, 1), Vector2.new(-1, 1) } do
 		local x, z = center.X + corner.X * (width / 2 - 1), center.Z + corner.Y * (width / 2 - 1)
@@ -627,7 +689,8 @@ local function buildBoards(model: Model)
 	end
 end
 
--- Painted dashes on the floor from the bottom of each stair to the pads, to the garage bays and between the pits.
+-- Painted dashes on the floor from the bottom of each stair to the pads, to the garage bays and between the pits. Paint,
+-- not light: a trail of glowing dashes across the floor pulls the eye at every step.
 local function buildWalkways(model: Model)
 	local routes = {
 		{ Vector2.new(-33, 42), Vector2.new(-46, 32), Vector2.new(-54, 18) },
@@ -648,10 +711,10 @@ local function buildWalkways(model: Model)
 					Vector3.new(1.5, 0.04, 0.32),
 					CFrame.lookAt(Vector3.new(at.X, 0.03, at.Y), Vector3.new(to.X, 0.03, to.Y))
 						* CFrame.Angles(0, math.rad(90), 0),
-					TEAL,
-					Enum.Material.Neon
+					TEAL_SOFT,
+					Enum.Material.SmoothPlastic
 				)
-				part.Transparency = 0.35
+				part.Transparency = 0.1
 			end
 		end
 	end

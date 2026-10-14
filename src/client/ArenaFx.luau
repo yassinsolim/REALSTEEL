@@ -18,9 +18,11 @@ export type ArenaFx = {
 local ArenaFx = {}
 
 local RIBBON_BASE = Color3.fromRGB(22, 70, 120)
-local RIBBON_HIGHLIGHT = Color3.fromRGB(255, 170, 70)
+-- Soft and slow: the ribbon runs around the island at the edge of every view of the hall, and a bright, quick chase there
+-- keeps pulling the eye.
+local RIBBON_HIGHLIGHT = Color3.fromRGB(214, 146, 70)
 local RIBBON_STEP = 1 / 15
-local RIBBON_SPEED = 0.45
+local RIBBON_SPEED = 0.28
 local CROWD_STEP = 1 / 8
 
 type RibbonCell = { part: BasePart, angle: number }

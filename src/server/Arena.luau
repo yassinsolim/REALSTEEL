@@ -25,7 +25,7 @@ local TEAM_RED = Color3.fromRGB(255, 84, 70)
 local TEAL = Color3.fromRGB(64, 214, 232)
 local AMBER = Color3.fromRGB(255, 178, 66)
 local ICE = Color3.fromRGB(225, 236, 255)
-local STEEL = Color3.fromRGB(46, 51, 66)
+local STEEL = Color3.fromRGB(80, 86, 100)
 local DARK = Color3.fromRGB(14, 16, 22)
 
 -- The island's floor sits just above the hall's, so the two never fight over the same surface.
@@ -42,22 +42,24 @@ local ROPE_HEIGHTS = { 1.5, 2.7, 3.9 }
 local ROPE_SEGMENTS = 36
 local POST_COUNT = 8
 
--- The floor around the main ring out to the spectators' rail, with a teal line and amber runway lights.
+-- The floor around the main ring out to the spectators' rail, with a teal line and amber runway lights, kept low so the
+-- lit ring stays the brightest thing on the island.
 local function buildIslandFloor(model: Model)
-	local floorColor = Color3.fromRGB(28, 32, 48)
+	local floorColor = Color3.fromRGB(52, 56, 70)
 	Build.disc(model, "Floor", FoundryLayout.RailRadius, ISLAND_TOP, 0.3, floorColor, Enum.Material.SmoothPlastic)
 	Build.ringLine(model, "FloorRing", 19.2, 0.3, ISLAND_TOP, TEAL, floorColor, Enum.Material.SmoothPlastic)
 	-- Amber dashes laid around the ring like runway lights.
 	for index = 1, 40 do
 		local angle = index / 40 * math.pi * 2
-		Build.decor(
+		local dash = Build.decor(
 			model,
 			"FloorLight" .. index,
 			Vector3.new(1.4, 0.06, 0.26),
 			CFrame.new(Build.polar(20.9, angle, ISLAND_TOP + 0.03)) * CFrame.Angles(0, -angle, 0),
-			AMBER,
+			Color3.fromRGB(214, 140, 56),
 			Enum.Material.Neon
 		)
+		dash.Transparency = 0.35
 	end
 end
 
@@ -240,12 +242,21 @@ function Arena.buildPit(parent: Instance, spec: FoundryLayout.RingSpec): Model
 	model.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
 	local radius = FoundryLayout.PitRailRadius
 
-	local floorColor = Color3.fromRGB(30, 33, 44)
+	local floorColor = Color3.fromRGB(52, 56, 66)
 	Build.disc(model, "Floor", radius + 1.5, ISLAND_TOP, 0.3, floorColor, Enum.Material.DiamondPlate)
-	Build.ringLine(model, "FloorRing", radius + 0.9, 0.24, ISLAND_TOP, AMBER, floorColor, Enum.Material.DiamondPlate)
+	Build.ringLine(
+		model,
+		"FloorRing",
+		radius + 0.9,
+		0.24,
+		ISLAND_TOP,
+		Color3.fromRGB(204, 128, 48),
+		floorColor,
+		Enum.Material.DiamondPlate
+	)
 	for index = 1, 24 do
 		local angle = index / 24 * math.pi * 2
-		Build.decor(
+		local dash = Build.decor(
 			model,
 			"FloorLight" .. index,
 			Vector3.new(1.1, 0.06, 0.24),
@@ -253,6 +264,7 @@ function Arena.buildPit(parent: Instance, spec: FoundryLayout.RingSpec): Model
 			TEAL,
 			Enum.Material.Neon
 		)
+		dash.Transparency = 0.4
 	end
 	buildRing(model)
 
@@ -332,15 +344,26 @@ function Arena.buildPit(parent: Instance, spec: FoundryLayout.RingSpec): Model
 			Enum.Material.SmoothPlastic
 		)
 	end
-	local rim = Build.decor(
-		model,
-		"ScreenRim",
-		Vector3.new(width + 0.16, 0.14, width + 0.16),
-		CFrame.new(0, center.Y - height / 2, 0),
-		AMBER,
-		Enum.Material.Neon
-	)
-	rim.Transparency = 0.2
+	-- A thin amber frame along the screen's bottom edges.
+	local edge = width + 0.16
+	for _, bar in
+		{
+			{ Vector3.new(edge, 0.14, 0.14), Vector3.new(0, 0, edge / 2) },
+			{ Vector3.new(edge, 0.14, 0.14), Vector3.new(0, 0, -edge / 2) },
+			{ Vector3.new(0.14, 0.14, edge), Vector3.new(edge / 2, 0, 0) },
+			{ Vector3.new(0.14, 0.14, edge), Vector3.new(-edge / 2, 0, 0) },
+		}
+	do
+		local rim = Build.decor(
+			model,
+			"ScreenRim",
+			bar[1],
+			CFrame.new(Vector3.new(0, center.Y - height / 2, 0) + bar[2]),
+			AMBER,
+			Enum.Material.Neon
+		)
+		rim.Transparency = 0.2
+	end
 	for _, corner in { Vector2.new(-1, -1), Vector2.new(1, 1) } do
 		local x, z = corner.X * (width / 2 - 0.6), corner.Y * (width / 2 - 0.6)
 		Build.bar(
