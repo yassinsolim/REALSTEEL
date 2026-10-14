@@ -775,6 +775,13 @@ Not covered yet: touching the stick and a button at the same time (mouse injecti
 (Studio's key injection sends the gamepad buttons as keyboard events, which the gamepad bindings ignore, so it needs a
 real controller), real-device performance, and the one or two predicted hits per 30 seconds that the server later retracts.
 
+**Connection probe.** Studio steps its server and client together, so it never shows a client falling behind a live
+server. For the place's owner only, `NetProbe` (a client and a server script) measures that on a real server: frame
+hitches, the engine's rollbacks, every jump of the local character, how far it got while trying to walk against how far
+the server's copy of it got, and the server's frame rate. It prints a `[REALSTEEL][probe]` line to the client log
+(`%LOCALAPPDATA%\Roblox\logs` on Windows) every two seconds while anything happens, and keeps a one-line readout in the
+bottom left corner. Other players run nothing.
+
 ## Next steps
 
 1. Play it. The bot levels were calibrated against scripted stand-ins, the sounds were chosen without being heard, and the
