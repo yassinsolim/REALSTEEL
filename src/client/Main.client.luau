@@ -43,7 +43,9 @@ local LobbyHud = require(script.Parent:WaitForChild("LobbyHud"))
 local MatchView = require(script.Parent:WaitForChild("MatchView"))
 local Menu = require(script.Parent:WaitForChild("Menu"))
 local PadView = require(script.Parent:WaitForChild("PadView"))
+local RewardScreens = require(script.Parent:WaitForChild("RewardScreens"))
 local RobotFrames = require(script.Parent:WaitForChild("RobotFrames"))
+local RobotRig = require(script.Parent:WaitForChild("RobotRig"))
 local Sfx = require(script.Parent:WaitForChild("Sfx"))
 local StageLights = require(script.Parent:WaitForChild("StageLights"))
 local Statue = require(script.Parent:WaitForChild("Statue"))
@@ -271,6 +273,8 @@ local hud = Hud.new()
 local menuRemote = ReplicatedStorage:WaitForChild("Menu") :: RemoteEvent
 local garageRemote = ReplicatedStorage:WaitForChild("Garage") :: RemoteEvent
 local shopRemote = ReplicatedStorage:WaitForChild("Shop") :: RemoteEvent
+-- Opens the cases or the rewards (set once the reward screens exist, below).
+local openScreen: (name: string) -> ()
 local garage = GaragePanel.new({
 	gui = hud.gui,
 	owner = player,
@@ -289,6 +293,9 @@ local garage = GaragePanel.new({
 			MarketplaceService:PromptProductPurchase(player, item.product :: number)
 		end
 	end,
+	openCases = function()
+		openScreen("cases")
+	end,
 })
 -- How a purchase prompt closed, so the shop shows a paid item as on its way rather than for sale. (The purchase itself is
 -- granted by the server's ProcessReceipt, never from this.)
@@ -305,20 +312,77 @@ end
 -- Whether the local player holds a seat in a ring; the main loop keeps it current.
 local seated = false
 local menu: Menu.Menu
+
+-- The reward screens: cases, and the daily reward with the day's contracts (see Rewards on the server).
+local rewardsRemote = ReplicatedStorage:WaitForChild("Rewards") :: RemoteEvent
+local rewardScreens = RewardScreens.new({
+	gui = hud.gui,
+	send = function(action: string, first: any?, second: any?)
+		rewardsRemote:FireServer(action, first, second)
+	end,
+	-- What a case gave goes on the robot through the garage, like any pick there.
+	equip = function(item: string)
+		local key, index = Looks.slotOf(item)
+		if key ~= nil and index ~= nil then
+			garageRemote:FireServer("set", { [key] = index })
+		end
+	end,
+	play = function(name: string, gain: number?, pitch: number?)
+		Sfx.play(sfx, name, gain, pitch)
+	end,
+	owned = function(): { [string]: boolean }
+		return Shop.parseOwned(player:GetAttribute("Owned"))
+	end,
+})
+
+-- The garage, the PLAY card and the reward screens take the screen in turn. A case's reel keeps the others shut until it
+-- has stopped.
 local function openGarage()
-	if not seated then
+	if seated then
+		return
+	end
+	rewardScreens.close()
+	if not rewardScreens.isOpen() then
 		menu.close()
 		garage.open()
 	end
 end
-menu = Menu.new(hud.gui, send, openGarage)
+openScreen = function(name: string)
+	if not seated then
+		menu.close()
+		if garage.isOpen() then
+			garage.close()
+		end
+		rewardScreens.open(name)
+	end
+end
+
+menu = Menu.new(hud.gui, send, openGarage, openScreen)
 local lobbyHud = LobbyHud.new(hud.gui, function()
-	if not seated and not garage.isOpen() then
+	if not seated and not garage.isOpen() and not rewardScreens.isOpen() then
 		menu.open(nil)
 	end
 end, function()
 	send("leave", nil)
+end, function()
+	openScreen("rewards")
+end, function()
+	openScreen("cases")
 end)
+rewardsRemote.OnClientEvent:Connect(function(kind: unknown, payload: unknown)
+	if kind == "state" and type(payload) == "table" then
+		rewardScreens.setState(payload :: any)
+		lobbyHud.setBadges(rewardScreens.dailyReady(), rewardScreens.casesWaiting())
+	elseif kind == "opened" and type(payload) == "table" then
+		-- Whatever was drawn is already the player's; if a fight started meanwhile, the reel just isn't shown.
+		if not seated then
+			rewardScreens.reveal(payload :: any)
+		end
+	elseif kind == "notice" and type(payload) == "string" then
+		lobbyHud.notify(payload)
+	end
+end)
+rewardsRemote:FireServer("sync")
 local bays = Bays.new(robot, openGarage)
 
 -- The screens over the rings: the big one over the main ring, and one over each pit in the pit's model.
@@ -367,7 +431,9 @@ UserInputService.InputBegan:Connect(function(input: InputObject, processed: bool
 		return
 	end
 	if key == Enum.KeyCode.P or key == Enum.KeyCode.ButtonSelect then
-		if menu.isOpen() then
+		if rewardScreens.isOpen() then
+			rewardScreens.close()
+		elseif menu.isOpen() then
 			menu.close()
 		else
 			menu.open(nil)
@@ -514,9 +580,14 @@ local function dressAll(ring: RingView, slot: number)
 		)
 		if rebuilt then
 			Effects.attachSlot(ring.effects, index, view, accent)
-		else
-			Effects.setAccent(ring.effects, index, accent)
 		end
+		Effects.setStyle(ring.effects, index, resolved.trail, resolved.impact, accent)
+		local glow = resolved.glow
+		RobotRig.setGlow(
+			view.robot,
+			if glow.color ~= nil or glow.animation ~= nil then rgb(glow.color or resolved.accent) else nil,
+			glow.animation
+		)
 		if ring.main then
 			StageLights.setAccent(stageLights, index, if index == slot then PALETTES.me.accent else PALETTES.foe.accent)
 		end
@@ -565,7 +636,9 @@ local function fighterName(ring: RingView, slot: number): string
 	local view = ring.matchView
 	local id = ownerId(ring, slot)
 	if id ~= 0 then
-		return displayName(id)
+		-- A player's name, with the title they wear (see Looks.Titles).
+		local title = Looks.titleOf(Looks.decode(ring.models[slot]:GetAttribute("Look")))
+		return if title ~= "" then `{displayName(id)}  ·  {title}` else displayName(id)
 	end
 	if view.botLevel > 0 then
 		if ownerId(ring, 3 - slot) ~= 0 then
@@ -680,6 +753,7 @@ RunService.RenderStepped:Connect(function(deltaTime: number)
 		if mine ~= nil then
 			menu.close()
 			garage.close()
+			rewardScreens.close(true)
 			lobbyHud.notify(`{mine.spec.label} IS YOURS`)
 			history = FrameData.newHistory(HISTORY_FRAMES)
 			Simulation.setRecorder(history, mine.index)
@@ -804,7 +878,7 @@ RunService.RenderStepped:Connect(function(deltaTime: number)
 	else
 		clearAround(nil, 0)
 	end
-	setControls(not (seated or menu.isOpen() or garageOpen))
+	setControls(not (seated or menu.isOpen() or garageOpen or rewardScreens.isOpen()))
 
 	-- Only the fight camera comes close enough to the ropes and rails to need them faded.
 	if mine ~= nil then
@@ -894,7 +968,7 @@ RunService.RenderStepped:Connect(function(deltaTime: number)
 	-- The pads' signs are drawn whether or not the player is on one, and in a ring too, where they can be in view.
 	local padLine = padView.step()
 	lobbyHud.update({
-		hidden = seated or menu.isOpen() or garageOpen,
+		hidden = seated or menu.isOpen() or garageOpen or rewardScreens.isOpen(),
 		queueMode = if queued then queueMode :: string else "",
 		queueLevel = playerNumber("QueueLevel"),
 		queueAhead = playerNumber("QueueAhead"),

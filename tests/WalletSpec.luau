@@ -125,6 +125,15 @@ return function(): (number, { string })
 		return { PlayerId = userId, PurchaseId = purchase, ProductId = product or monarch.product, CurrencySpent = 499 }
 	end
 
+	-- Whether the Owned attribute a player shows holds exactly these items (it is packed, see Shop.formatOwned).
+	local function shows(player: any, ids: { string }): boolean
+		local set: { [string]: boolean } = {}
+		for _, id in ids do
+			set[id] = true
+		end
+		return player:GetAttribute("Owned") == Shop.formatOwned(set)
+	end
+
 	local ok, err = pcall(function()
 		-- Loading: what is stored is published, cleaned of what the shop does not sell.
 		do
@@ -135,8 +144,8 @@ return function(): (number, { string })
 			wallet.add(player)
 			task.wait(0.05)
 			check(
-				"a stored wallet is read and published",
-				player:GetAttribute("Coins") == 300 and player:GetAttribute("Owned") == "crest.crown,hat.party",
+				"a stored wallet is read and published (an item the game no longer has is not shown)",
+				player:GetAttribute("Coins") == 300 and shows(player, { "crest.crown" }),
 				`{player:GetAttribute("Coins")} {player:GetAttribute("Owned")}`
 			)
 			check(
@@ -252,7 +261,7 @@ return function(): (number, { string })
 				"its price is taken, it is owned, and that is published and reported",
 				wallet.coins(player) == 700 - crown.coins
 					and wallet.owns(player, "crest.crown")
-					and player:GetAttribute("Owned") == "crest.crown"
+					and shows(player, { "crest.crown" })
 					and #reported == seen + 1
 			)
 			task.wait(0.05)
@@ -317,7 +326,7 @@ return function(): (number, { string })
 					and table.find(store.data.u11.owned, "body.monarch") ~= nil
 					and table.find(store.data.u11.receipts, "p1") ~= nil
 					and wallet.owns(player, "body.monarch")
-					and player:GetAttribute("Owned") == "body.monarch"
+					and shows(player, { "body.monarch" })
 					and #reported == seen + 1
 			)
 			local writes = store.writes
@@ -377,13 +386,231 @@ return function(): (number, { string })
 			check("a receipt the store cannot take is tried later", wallet.processReceipt(receipt(13, "r1")) == NotYet)
 			check(
 				"but the buyer has the item for the session, so it is not offered again",
-				wallet.owns(buyer, "body.monarch") and buyer:GetAttribute("Owned") == "body.monarch"
+				wallet.owns(buyer, "body.monarch") and shows(buyer, { "body.monarch" })
 			)
 			check(
 				"and Roblox's retry saves it",
 				wallet.processReceipt(receipt(13, "r1")) == Granted
 					and store.data.u13 ~= nil
 					and table.find(store.data.u13.owned, "body.monarch") ~= nil
+			)
+		end
+
+		-- Cases and the rewards' records: a change shows at once and is saved as an addition; a pack of cases bought with
+		-- Robux is granted once, and counted once while this server's copy of the wallet catches up.
+		do
+			local Cases: any = load((temp :: any).Shared.Cases)
+			local case = Cases.List[1]
+			local single, five = case.packs[1], case.packs[2]
+			local store = newStore()
+			store.data.u14 = { v = 1, coins = 900, owned = {}, cases = { [case.id] = 2 } }
+			local wallet, reported = newWallet(store)
+			local player = newPlayer(14)
+			local heard = 0
+			wallet.watch(function(who: any)
+				if who == player then
+					heard += 1
+				end
+			end)
+			wallet.add(player)
+			task.wait(0.05)
+			local view = wallet.view(player)
+			check("stored cases are read", wallet.ready(player) and view ~= nil and view.cases[case.id] == 2)
+			check("and whoever watches the wallet hears of it", heard > 0, heard)
+			check("a player nobody added takes no change", not wallet.apply(newPlayer(98), { coins = 5 }))
+			local seen = #reported
+			check(
+				"a change is applied at once",
+				wallet.apply(player, {
+					coins = -500,
+					cases = { [case.id] = -1, ["case.nothing"] = 4 },
+					owned = { "glow.toxic" },
+					state = { pity = { [case.id] = 3 }, junk = 1 },
+				})
+			)
+			view = wallet.view(player)
+			check(
+				"its coins, cases, item and record all show, and nothing unknown",
+				view ~= nil
+					and view.coins == 400
+					and view.cases[case.id] == 1
+					and view.cases["case.nothing"] == nil
+					and view.owned["glow.toxic"] == true
+					and view.state.pity ~= nil
+					and view.state.pity[case.id] == 3
+					and view.state.junk == nil
+					and wallet.owns(player, "glow.toxic")
+					and player:GetAttribute("Coins") == 400
+					and Shop.parseOwned(player:GetAttribute("Owned"))["glow.toxic"] == true
+			)
+			check("an item a change grants is reported, so the garage dresses them again", #reported == seen + 1)
+			local snapshot = wallet.view(player)
+			if snapshot ~= nil then
+				snapshot.state.pity[case.id] = 29
+			end
+			view = wallet.view(player)
+			check("a view's records are copies", view ~= nil and view.state.pity[case.id] == 3)
+			wallet.saveAll()
+			local saved = store.data.u14
+			check(
+				"saving adds the change to what is stored",
+				saved.coins == 400
+					and saved.cases[case.id] == 1
+					and table.find(saved.owned, "glow.toxic") ~= nil
+					and saved.state.pity[case.id] == 3
+			)
+
+			local function packReceipt(userId: number, purchase: string, pack: any): { [string]: any }
+				return { PlayerId = userId, PurchaseId = purchase, ProductId = pack.product, CurrencySpent = pack.robux }
+			end
+			check("a pack is granted", wallet.processReceipt(packReceipt(14, "c1", five)) == Granted)
+			view = wallet.view(player)
+			check(
+				"its cases are stored with the purchase and counted once",
+				view ~= nil
+					and view.cases[case.id] == 6
+					and store.data.u14.cases[case.id] == 6
+					and table.find(store.data.u14.receipts, "c1") ~= nil,
+				if view ~= nil then view.cases[case.id] else nil
+			)
+			check("the same receipt again is granted", wallet.processReceipt(packReceipt(14, "c1", five)) == Granted)
+			view = wallet.view(player)
+			check(
+				"without adding its cases twice",
+				view ~= nil and view.cases[case.id] == 6 and store.data.u14.cases[case.id] == 6,
+				if view ~= nil then view.cases[case.id] else nil
+			)
+			wallet.apply(player, { cases = { [case.id] = -1 } })
+			wallet.saveAll()
+			view = wallet.view(player)
+			check(
+				"once a save brings back the stored wallet, the receipt's cases are not counted apart",
+				view ~= nil and view.cases[case.id] == 5 and store.data.u14.cases[case.id] == 5,
+				if view ~= nil then view.cases[case.id] else nil
+			)
+			store.failNext = 1
+			check(
+				"a pack the store cannot take is tried later",
+				wallet.processReceipt(packReceipt(14, "c2", single)) == NotYet
+			)
+			view = wallet.view(player)
+			check("and gives nothing until it lands", view ~= nil and view.cases[case.id] == 5)
+			check("Roblox's retry grants it", wallet.processReceipt(packReceipt(14, "c2", single)) == Granted)
+			view = wallet.view(player)
+			check(
+				"once",
+				view ~= nil and view.cases[case.id] == 6 and store.data.u14.cases[case.id] == 6,
+				if view ~= nil then view.cases[case.id] else nil
+			)
+			store.loseNextReply = true
+			check(
+				"a pack whose reply was lost is not granted yet",
+				wallet.processReceipt(packReceipt(14, "c3", single)) == NotYet
+			)
+			check("but its retry is", wallet.processReceipt(packReceipt(14, "c3", single)) == Granted)
+			view = wallet.view(player)
+			check(
+				"and its case counts once",
+				view ~= nil and view.cases[case.id] == 7 and store.data.u14.cases[case.id] == 7,
+				if view ~= nil then view.cases[case.id] else nil
+			)
+			check(
+				"a pack for a player who is not here is granted",
+				wallet.processReceipt(packReceipt(15, "d1", single)) == Granted
+			)
+			check("and kept for them", store.data.u15 ~= nil and store.data.u15.cases[case.id] == 1)
+
+			-- A case from a pack is spent by opening it even before the wallet has caught up with the pack: its cases come
+			-- before any change made since, so the open takes one off them instead of off a count that has none.
+			local opener = newPlayer(18)
+			wallet.add(opener)
+			task.wait(0.05)
+			check(
+				"a pack for a player with no cases is granted",
+				wallet.processReceipt(packReceipt(18, "e1", single)) == Granted
+			)
+			wallet.apply(opener, { cases = { [case.id] = -1 }, owned = { "title.brawler" } })
+			view = wallet.view(opener)
+			check(
+				"opening its case spends it at once, before any save",
+				view ~= nil and (view.cases[case.id] or 0) == 0,
+				if view ~= nil then view.cases[case.id] else nil
+			)
+			wallet.saveAll()
+			view = wallet.view(opener)
+			check(
+				"and the save agrees",
+				view ~= nil
+					and (view.cases[case.id] or 0) == 0
+					and (store.data.u18.cases[case.id] or 0) == 0
+					and table.find(store.data.u18.owned, "title.brawler") ~= nil
+			)
+			local session = newWallet(nil)
+			local guest = newPlayer(19)
+			session.add(guest)
+			task.wait(0.05)
+			session.processReceipt(packReceipt(19, "g1", single))
+			session.apply(guest, { cases = { [case.id] = -1 } })
+			local guestView = session.view(guest)
+			check(
+				"and so does a wallet that lasts for the session",
+				guestView ~= nil and (guestView.cases[case.id] or 0) == 0,
+				if guestView ~= nil then guestView.cases[case.id] else nil
+			)
+
+			-- However much a player owns, the Owned attribute fits what a place with server authority replicates.
+			local Looks: any = load((temp :: any).Shared.Looks)
+			local everything = Looks.items()
+			wallet.apply(player, { owned = everything })
+			local text = player:GetAttribute("Owned")
+			local back = Shop.parseOwned(text)
+			local all = true
+			for _, item in everything do
+				all = all and back[item] == true
+			end
+			check(
+				"owning everything still fits one attribute, and reads back",
+				type(text) == "string" and #text <= Shop.AttributeLimit and all,
+				if type(text) == "string" then #text else nil
+			)
+		end
+
+		-- Cases and records a newer version wrote are kept, so a server still running this one never writes them away.
+		do
+			local store = newStore()
+			store.data.u17 = {
+				v = 1,
+				coins = 10,
+				owned = {},
+				cases = { ["case.foundry"] = 1, ["case.newer"] = 3 },
+				state = { pity = { ["case.foundry"] = 2, ["case.newer"] = 7 }, season = { tier = 4 } },
+			}
+			local wallet = newWallet(store)
+			local player = newPlayer(17)
+			wallet.add(player)
+			task.wait(0.05)
+			-- As opening a case does: the pity record as it stands, with this case's counter changed.
+			local current = wallet.view(player)
+			local pity = table.clone(if current ~= nil and current.state.pity ~= nil then current.state.pity else {})
+			pity["case.foundry"] = 3
+			wallet.apply(player, { cases = { ["case.newer"] = 5 }, state = { pity = pity } })
+			wallet.matchEnded("versus", 0, { player }, 1)
+			wallet.saveAll()
+			local saved = store.data.u17
+			check(
+				"a case this version does not know keeps its count, and cannot be added to",
+				saved.coins == 10 + Shop.Rewards.versusWin
+					and saved.cases["case.foundry"] == 1
+					and saved.cases["case.newer"] == 3,
+				`{saved.cases["case.foundry"]} {saved.cases["case.newer"]}`
+			)
+			check(
+				"its pity counter and a record this version does not know are kept",
+				saved.state.pity ~= nil
+					and saved.state.pity["case.foundry"] == 3
+					and saved.state.pity["case.newer"] == 7
+					and saved.state.season ~= nil
+					and saved.state.season.tier == 4
 			)
 		end
 

@@ -8,6 +8,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BotBrain = require(ReplicatedStorage.Shared.BotBrain)
+local Cases = require(ReplicatedStorage.Shared.Cases)
 local FightConfig = require(ReplicatedStorage.Shared.FightConfig)
 local FightSim = require(ReplicatedStorage.Shared.FightSim)
 local FrameData = require(ReplicatedStorage.Shared.FrameData)
@@ -24,6 +25,15 @@ local PLATING, DAMPERS = 2, 3
 
 local function code(chassis: number, arms: number?, core: number?, legs: number?): number
 	return Loadout.encode({ chassis = chassis, arms = arms or 1, core = core or 1, legs = legs or 1 })
+end
+
+-- The default look with some choices changed.
+local function lookWith(fields: { [string]: number }): Looks.Look
+	local look = Looks.default()
+	for key, value in fields do
+		(look :: any)[key] = value
+	end
+	return look
 end
 
 local function fighterWith(loadout: number, x: number): FightSim.Fighter
@@ -597,10 +607,19 @@ return function(): (number, { string })
 
 	-- Looks: paint, finishes and crests, and how two fighters are kept apart.
 	do
+		local function freeCount(list: { Looks.Swatch }): number
+			local count = 0
+			for _, swatch in list do
+				if swatch.item == nil then
+					count += 1
+				end
+			end
+			return count
+		end
 		check(
-			"sixteen armor and accent swatches",
-			#Looks.Armor == 16 and #Looks.Accents == 16,
-			`{#Looks.Armor},{#Looks.Accents}`
+			"sixteen armor and accent swatches for everyone, and case paints after them",
+			freeCount(Looks.Armor) == 16 and freeCount(Looks.Accents) == 16 and Looks.Armor[17].item ~= nil,
+			`{freeCount(Looks.Armor)},{freeCount(Looks.Accents)}`
 		)
 		check(
 			"four finishes, seven crests, and a kit and a shop item (or none) for each crest",
@@ -635,17 +654,60 @@ return function(): (number, { string })
 		check("every swatch is a real color with its own name", valid and unique)
 		check("the defaults are the first of everything", Looks.encode(Looks.default()) == 1)
 
+		-- Too many looks to try them all, so a spread of them across the whole range, and the ends.
+		local count = Looks.codeCount()
+		local stride = math.max(1, math.floor(count / 150000))
+		local tried = 0
 		local roundTrips = 0
-		for value = 1, Looks.codeCount() do
+		for value = 1, count, stride do
+			tried += 1
 			local back = Looks.decode(value)
 			if Looks.encode(back) == value then
 				roundTrips += 1
 			end
 		end
+		for _, value in { count, count - 1, 2 } do
+			tried += 1
+			if Looks.encode(Looks.decode(value)) == value then
+				roundTrips += 1
+			end
+		end
+		check("every look survives the round trip", roundTrips == tried, `{roundTrips} of {tried}`)
+		local lastOfAll = lookWith({
+			armor = #Looks.Armor,
+			accent = #Looks.Accents,
+			finish = #Looks.Finishes,
+			crest = #Looks.Crests,
+			body = #Looks.Bodies,
+			glow = #Looks.Glows,
+			trail = #Looks.Trails,
+			impact = #Looks.Impacts,
+			title = #Looks.Titles,
+		})
+		check("the last of everything is the last code", Looks.encode(lastOfAll) == count)
+		local mixed = lookWith({
+			armor = 4,
+			accent = 9,
+			finish = 2,
+			crest = 6,
+			body = 3,
+			glow = 8,
+			trail = 2,
+			impact = 5,
+			title = 7,
+		})
+		local mixedBack = Looks.decode(Looks.encode(mixed))
 		check(
-			"every look survives the round trip",
-			roundTrips == Looks.codeCount(),
-			`{roundTrips} of {Looks.codeCount()}`
+			"each choice comes back where it was",
+			mixedBack.armor == 4
+				and mixedBack.accent == 9
+				and mixedBack.finish == 2
+				and mixedBack.crest == 6
+				and mixedBack.body == 3
+				and mixedBack.glow == 8
+				and mixedBack.trail == 2
+				and mixedBack.impact == 5
+				and mixedBack.title == 7
 		)
 		local garbage: { any } = { 0, -1, Looks.codeCount() + 1, 2.5, 0 / 0, "3", true, {}, nil }
 		local allDefault = true
@@ -654,15 +716,30 @@ return function(): (number, { string })
 			if back.armor ~= 1 or back.accent ~= 1 or back.finish ~= 1 or back.crest ~= 1 or back.body ~= 1 then
 				allDefault = false
 			end
+			if back.glow ~= 1 or back.trail ~= 1 or back.impact ~= 1 or back.title ~= 1 then
+				allDefault = false
+			end
 		end
 		check("nonsense looks fall back to the default", allDefault)
-		local odd = Looks.sanitize({ armor = 99, accent = -2, finish = "x", crest = 3.9, body = 42 })
+		local odd =
+			Looks.sanitize({ armor = 99, accent = -2, finish = "x", crest = 3.9, body = 42, glow = 99, title = -1 })
 		check(
 			"odd looks are clamped",
-			odd.armor == 16 and odd.accent == 1 and odd.finish == 1 and odd.crest == 3 and odd.body == #Looks.Bodies,
-			`{odd.armor},{odd.accent},{odd.finish},{odd.crest},{odd.body}`
+			odd.armor == #Looks.Armor
+				and odd.accent == 1
+				and odd.finish == 1
+				and odd.crest == 3
+				and odd.body == #Looks.Bodies
+				and odd.glow == #Looks.Glows
+				and odd.title == 1
+				and odd.trail == 1,
+			`{odd.armor},{odd.accent},{odd.finish},{odd.crest},{odd.body},{odd.glow},{odd.title}`
 		)
 		check("a save from before bodies wears the stock body", Looks.sanitize({ armor = 3, crest = 2 }).body == 1)
+		check(
+			"a save from before case items wears none",
+			Looks.sanitize({ armor = 3 }).glow == 1 and Looks.titleOf(Looks.sanitize({ armor = 3 })) == ""
+		)
 
 		-- Kits and frames.
 		check(
@@ -670,10 +747,8 @@ return function(): (number, { string })
 			#Looks.kitsFor(Loadout.decode(Loadout.DefaultCode), Looks.default()) == 0
 		)
 		check("every crest but none has a kit", #Looks.CrestKits == #Looks.Crests and Looks.CrestKits[1] == "")
-		local dressed = Looks.kitsFor(
-			{ chassis = BULWARK, arms = PISTON, core = PLATING, legs = 2 },
-			{ armor = 1, accent = 1, finish = 1, crest = 4, body = 1 }
-		)
+		local dressed =
+			Looks.kitsFor({ chassis = BULWARK, arms = PISTON, core = PLATING, legs = 2 }, lookWith({ crest = 4 }))
 		check(
 			"only the crest is a kit; the build shows in the frame",
 			table.concat(dressed, ",") == "CrestHorns",
@@ -706,7 +781,7 @@ return function(): (number, { string })
 				and Looks.Bodies[1].item == nil
 		)
 		local maulBuild = { chassis = MAUL, arms = 1, core = 1, legs = 1 }
-		local wearsMonarch = { armor = 1, accent = 1, finish = 1, crest = 1, body = monarch }
+		local wearsMonarch = lookWith({ body = monarch })
 		check(
 			"a premium body draws its own chassis, and only that one",
 			Looks.frameFor(maulBuild, wearsMonarch) == "Monarch"
@@ -740,8 +815,13 @@ return function(): (number, { string })
 		end
 		check("every chassis has a premium body", everyChassis)
 		check("each premium body is a frame of its own, sold for Robux", ownFrames and forRobux)
-		local premium =
-			{ armor = 2, accent = 3, finish = 2, crest = Looks.crestFor("crest.crown") :: number, body = monarch }
+		local premium = lookWith({
+			armor = 2,
+			accent = 3,
+			finish = 2,
+			crest = Looks.crestFor("crest.crown") :: number,
+			body = monarch,
+		})
 		local nothing = Looks.strip(premium, function(_item: string): boolean
 			return false
 		end)
@@ -763,10 +843,65 @@ return function(): (number, { string })
 				and onlyCrown.body == 1
 				and onlyCrown.crest == premium.crest
 		)
-		local freeStays = Looks.strip({ armor = 1, accent = 1, finish = 1, crest = 4, body = 1 }, function(): boolean
+		local freeStays = Looks.strip(lookWith({ crest = 4 }), function(): boolean
 			return false
 		end)
 		check("everyone's crests need nothing", freeStays.crest == 4)
+		local cased = lookWith({ armor = 17, accent = 17, glow = 9, trail = 6, impact = 5, title = 8, finish = 3 })
+		local unowned = Looks.strip(cased, function(): boolean
+			return false
+		end)
+		check(
+			"case items come off a look whose wearer does not own them, and paint for everyone stays",
+			unowned.armor == 1
+				and unowned.accent == 1
+				and unowned.glow == 1
+				and unowned.trail == 1
+				and unowned.impact == 1
+				and unowned.title == 1
+				and unowned.finish == 3
+		)
+		local owned = Looks.strip(cased, function(item: string): boolean
+			return item == "glow.spectrum" or item == "title.unbreakable"
+		end)
+		check("and the ones they own stay", owned.glow == 9 and owned.title == 8 and owned.trail == 1)
+		local slotKey, slotIndex = Looks.slotOf("glow.spectrum")
+		check(
+			"an item knows what it unlocks",
+			slotKey == "glow"
+				and slotIndex == 9
+				and Looks.itemAt("glow", 9) == "glow.spectrum"
+				and Looks.itemAt("glow", 1) == nil
+		)
+		local crown = Looks.describe("crest.crown")
+		local spectrum = Looks.describe("glow.spectrum")
+		check(
+			"and what it is called",
+			crown ~= nil
+				and crown.name == "CROWN"
+				and spectrum ~= nil
+				and spectrum.kind == "CORE GLOW"
+				and Looks.describe("hat.nothing") == nil
+		)
+		check(
+			"a title shows only when one is worn",
+			Looks.titleOf(Looks.default()) == "" and Looks.titleOf(lookWith({ title = 8 })) == "UNBREAKABLE"
+		)
+		local caseLists: { { { name: string, item: string? } } } =
+			{ Looks.Glows :: any, Looks.Trails :: any, Looks.Impacts :: any, Looks.Titles :: any }
+		local firstsFree = true
+		local restCased = true
+		for _, list in caseLists do
+			for index, entry in list do
+				if index == 1 and entry.item ~= nil then
+					firstsFree = false
+				elseif index > 1 and entry.item == nil then
+					restCased = false
+				end
+			end
+		end
+		check("glows, trails, impacts and titles start with one for everyone", firstsFree)
+		check("and every other one is a case item", restCased)
 		local botsFree = true
 		for seed = 0, 40 do
 			if Looks.crestItem(Looks.botLook(seed).crest) ~= nil or Looks.botLook(seed).body ~= 1 then
@@ -822,7 +957,7 @@ return function(): (number, { string })
 				and Shop.reward("training", 1, true) == 0
 				and Shop.reward("exhibition", 1, true) == 0
 		)
-		local parsed = Shop.parseOwned("body.monarch,crest.crown")
+		local parsed = Shop.parseOwned(Shop.formatOwned({ ["body.monarch"] = true, ["crest.crown"] = true }))
 		check(
 			"coins read with separators and owned items read back",
 			Shop.formatCoins(1250) == "1,250"
@@ -830,9 +965,50 @@ return function(): (number, { string })
 				and Shop.formatCoins(1000000) == "1,000,000"
 				and parsed["body.monarch"] == true
 				and parsed["crest.crown"] == true
+				and parsed["crest.mohawk"] == nil
 				and next(Shop.parseOwned(nil)) == nil
 				and next(Shop.parseOwned("")) == nil
+				and Shop.formatOwned({}) == ""
 		)
+
+		-- What a player owns fits one replicated attribute, whatever they own, and reads back exactly.
+		do
+			local ownsAll: { [string]: boolean } = {}
+			local items = Looks.items()
+			for _, item in items do
+				ownsAll[item] = true
+			end
+			local catalogued = true
+			for _, item in Shop.Items do
+				catalogued = catalogued and ownsAll[item.id] == true
+			end
+			for _, case in Cases.List do
+				for _, list in case.items do
+					for _, item in list do
+						catalogued = catalogued and ownsAll[item] == true
+					end
+				end
+			end
+			check("every shop item and case item can be owned", catalogued)
+			local all = Shop.formatOwned(ownsAll)
+			check("owning everything fits an attribute", #all <= Shop.AttributeLimit, #all)
+			local back = Shop.parseOwned(all)
+			local roundTrip = true
+			for _, item in items do
+				roundTrip = roundTrip and back[item] == true
+				local alone = Shop.parseOwned(Shop.formatOwned({ [item] = true }))
+				local found = 0
+				for _ in alone do
+					found += 1
+				end
+				roundTrip = roundTrip and alone[item] == true and found == 1
+			end
+			check("every item reads back, alone and with everything else", roundTrip)
+			check(
+				"an id no item has is left out",
+				Shop.formatOwned({ ["hat.party"] = true }) == "" and next(Shop.parseOwned("?!")) == nil
+			)
+		end
 
 		-- Colors.
 		local me, foe = Looks.resolve(Looks.default(), Looks.default())
@@ -843,7 +1019,7 @@ return function(): (number, { string })
 				and foe.armor == Looks.Team.foe.armor
 				and foe.accent == Looks.Team.foe.accent
 		)
-		local crimson = { armor = 10, accent = 11, finish = 3, crest = 2, body = 1 }
+		local crimson = lookWith({ armor = 10, accent = 11, finish = 3, crest = 2 })
 		local mine, theirs = Looks.resolve(crimson, crimson)
 		check(
 			"a look is shown as chosen",
@@ -857,15 +1033,15 @@ return function(): (number, { string })
 			"the opponent falls back to its team colors",
 			theirs.armor == Looks.Team.foe.armor and theirs.accent == Looks.Team.foe.accent
 		)
-		local gunmetal = { armor = 3, accent = 1, finish = 1, crest = 1, body = 1 }
+		local gunmetal = lookWith({ armor = 3 })
 		local _, against = Looks.resolve(gunmetal, Looks.default())
 		check(
 			"even the team color gives way when it would clash",
 			Looks.distance(against.armor, Looks.Armor[3].color :: Looks.Rgb) >= 70
 		)
 		local apart1, apart2 = Looks.resolve(
-			{ armor = 10, accent = 9, finish = 1, crest = 1, body = 1 },
-			{ armor = 12, accent = 3, finish = 2, crest = 5, body = 1 }
+			lookWith({ armor = 10, accent = 9 }),
+			lookWith({ armor = 12, accent = 3, finish = 2, crest = 5, glow = 4 })
 		)
 		check(
 			"colors that already differ are left alone",
@@ -873,6 +1049,10 @@ return function(): (number, { string })
 				and apart2.accent == Looks.Accents[3].color
 				and apart2.finish.name == "MATTE"
 				and apart1.crest == 1
+		)
+		check(
+			"each side shows its own glow, trail and impact",
+			apart2.glow == Looks.Glows[4] and apart1.glow == Looks.Glows[1] and apart1.trail == Looks.Trails[1]
 		)
 	end
 

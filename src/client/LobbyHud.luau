@@ -1,8 +1,9 @@
 --!strict
 
--- Client: what the player sees while walking around the hall. A PLAY button (P or Select also open the PLAY card), a chip
--- that says where they stand in line for a fight with a LEAVE button, and short notices such as "PIT 1 IS YOURS". It
--- only reads what it is given; the server keeps the line (see Rings).
+-- Client: what the player sees while walking around the hall. A PLAY button (P or Select also open the PLAY card) with
+-- REWARDS and CASES beside it, each marked when something waits there, a chip that says where they stand in line for a
+-- fight with a LEAVE button, and short notices such as "PIT 1 IS YOURS". It only reads what it is given; the server keeps
+-- the line (see Rings) and the rewards (see Rewards).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -28,6 +29,8 @@ export type LobbyHud = {
 	update: (info: Info) -> (),
 	setCompact: (compact: boolean) -> (),
 	notify: (text: string) -> (),
+	-- The marks on the REWARDS and CASES buttons: whether the daily reward waits, and how many cases are unopened.
+	setBadges: (dailyReady: boolean, cases: number) -> (),
 }
 
 local LobbyHud = {}
@@ -65,13 +68,59 @@ function LobbyHud.describe(info: Info): string
 	return `IN LINE  ·  {what}  ·  {place}`
 end
 
-function LobbyHud.new(gui: ScreenGui, onPlay: () -> (), onLeave: () -> ()): LobbyHud
+function LobbyHud.new(
+	gui: ScreenGui,
+	onPlay: () -> (),
+	onLeave: () -> (),
+	onRewards: () -> (),
+	onCases: () -> ()
+): LobbyHud
 	local root = Instance.new("Frame")
 	root.Name = "Lobby"
 	root.BackgroundTransparency = 1
 	root.Size = UDim2.fromScale(1, 1)
 	root.ZIndex = 15
 	root.Parent = gui
+
+	-- REWARDS and CASES sit either side of PLAY, smaller, each with a mark when something waits there.
+	local function sideButton(name: string, label: string, onActivate: () -> ()): (TextButton, TextLabel)
+		local item = Instance.new("TextButton")
+		item.Name = name
+		item.AnchorPoint = Vector2.new(0.5, 1)
+		item.BackgroundColor3 = PANEL
+		item.BackgroundTransparency = 0.08
+		item.BorderSizePixel = 0
+		item.AutoButtonColor = true
+		item.Text = label
+		item.Font = Enum.Font.GothamBlack
+		item.TextColor3 = Color3.new(1, 1, 1)
+		item.Parent = root
+		round(item, 10)
+		local edge = Instance.new("UIStroke")
+		edge.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		edge.Color = TEAL
+		edge.Transparency = 0.4
+		edge.Thickness = 1.5
+		edge.Parent = item
+		local badge = Instance.new("TextLabel")
+		badge.Name = "Badge"
+		badge.AnchorPoint = Vector2.new(0.5, 0.5)
+		badge.Position = UDim2.new(1, -4, 0, 4)
+		badge.Size = UDim2.fromOffset(22, 22)
+		badge.BackgroundColor3 = AMBER
+		badge.BorderSizePixel = 0
+		badge.Text = ""
+		badge.Font = Enum.Font.GothamBlack
+		badge.TextSize = 12
+		badge.TextColor3 = DARK
+		badge.Visible = false
+		badge.Parent = item
+		round(badge, 11)
+		item.Activated:Connect(onActivate)
+		return item, badge
+	end
+	local rewardsButton, rewardsBadge = sideButton("Rewards", "REWARDS", onRewards)
+	local casesButton, casesBadge = sideButton("Cases", "CASES", onCases)
 
 	local play = Instance.new("TextButton")
 	play.Name = "Play"
@@ -148,6 +197,15 @@ function LobbyHud.new(gui: ScreenGui, onPlay: () -> (), onLeave: () -> ()): Lobb
 		play.Size = if compact then UDim2.fromOffset(150, 44) else UDim2.fromOffset(200, 54)
 		play.TextSize = if compact then 20 else 24
 		play.Position = UDim2.new(0.5, 0, 1, if compact then -14 else -26)
+		local side = if compact then UDim2.fromOffset(104, 38) else UDim2.fromOffset(132, 46)
+		local reach = if compact then 140 else 182
+		local lift = if compact then -17 else -30
+		for _, item in { rewardsButton, casesButton } do
+			item.Size = side
+			item.TextSize = if compact then 13 else 15
+		end
+		rewardsButton.Position = UDim2.new(0.5, -reach, 1, lift)
+		casesButton.Position = UDim2.new(0.5, reach, 1, lift)
 		hint.Visible = not compact
 		chip.Size = if compact then UDim2.fromOffset(330, 34) else UDim2.fromOffset(440, 42)
 		chip.Position = UDim2.new(0.5, 0, 0, if compact then 46 else 62)
@@ -166,6 +224,8 @@ function LobbyHud.new(gui: ScreenGui, onPlay: () -> (), onLeave: () -> ()): Lobb
 	return {
 		update = function(info: Info)
 			play.Visible = not info.hidden
+			rewardsButton.Visible = not info.hidden
+			casesButton.Visible = not info.hidden
 			local line = LobbyHud.describe(info)
 			chip.Visible = not info.hidden and line ~= ""
 			-- Stepping off is how a pad is let go of; LEAVE is for the line.
@@ -180,6 +240,12 @@ function LobbyHud.new(gui: ScreenGui, onPlay: () -> (), onLeave: () -> ()): Lobb
 				compact = value
 				layout()
 			end
+		end,
+		setBadges = function(dailyReady: boolean, cases: number)
+			rewardsBadge.Visible = dailyReady
+			rewardsBadge.Text = if dailyReady then "!" else ""
+			casesBadge.Visible = cases > 0
+			casesBadge.Text = if cases > 9 then "9+" else tostring(cases)
 		end,
 		notify = function(content: string)
 			noticeToken += 1

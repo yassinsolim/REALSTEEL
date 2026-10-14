@@ -58,6 +58,10 @@ export type RobotRig = {
 	wear: { [string]: SurfaceAppearance }?,
 	finishName: string,
 	appearances: { [BasePart]: SurfaceAppearance? },
+	-- The core glow's own color (a case item, see Looks.Glows) in place of the accent's, and how it moves: nil, "pulse"
+	-- or "spectrum".
+	glowColor: Color3?,
+	glowAnimation: string?,
 }
 
 local RobotRig = {}
@@ -84,6 +88,9 @@ end
 local function paint(self: RobotRig, part: BasePart, role: string)
 	local def = self.rig.def.roles[role]
 	local color = roleColor(def, role, self.accent, self.armor)
+	if role == "Glow" and self.glowColor ~= nil then
+		color = RobotRig.glowAt(self, os.clock())
+	end
 	if self.flash ~= nil and (role == "Armor" or role == "Trim") then
 		color = color:Lerp(self.flash, FLASH_STRENGTH)
 	end
@@ -256,6 +263,8 @@ function RobotRig.new(
 		wear = wear,
 		finishName = "",
 		appearances = {},
+		glowColor = nil,
+		glowAnimation = nil,
 	}
 	buildParts(self, rig, template)
 	folder.Parent = parent
@@ -312,6 +321,45 @@ function RobotRig.setFlash(self: RobotRig, color: Color3?)
 	if color ~= self.flash then
 		self.flash = color
 		applyColors(self)
+	end
+end
+
+-- The core glow's color at a moment: its own color, breathing for "pulse", or running through every hue for "spectrum".
+function RobotRig.glowAt(self: RobotRig, now: number): Color3
+	local color = self.glowColor or self.accent
+	if self.glowAnimation == "pulse" then
+		local breath = 0.5 + 0.5 * math.sin(now * 2.6)
+		return Color3.new(0, 0, 0):Lerp(color, 0.45 + 0.55 * breath)
+	elseif self.glowAnimation == "spectrum" then
+		return Color3.fromHSV((now * 0.12) % 1, 0.8, 1)
+	end
+	return color
+end
+
+-- Gives the core glow a color of its own and a way of moving (see Looks.Glows), or follows the accent again with nil.
+function RobotRig.setGlow(self: RobotRig, color: Color3?, animation: string?)
+	if color ~= self.glowColor or animation ~= self.glowAnimation then
+		self.glowColor = color
+		self.glowAnimation = animation
+		applyColors(self)
+	end
+end
+
+-- Moves an animated core glow on; place does it every frame, so only a robot that is not placed needs it.
+function RobotRig.stepGlow(self: RobotRig, now: number)
+	if self.glowAnimation == nil or self.glowColor == nil then
+		return
+	end
+	local color = RobotRig.glowAt(self, now)
+	for index, part in self.parts do
+		if self.roles[index] == "Glow" then
+			part.Color = color
+		end
+	end
+	for _, kit in self.kitParts do
+		if kit.role == "Glow" then
+			kit.part.Color = color
+		end
 	end
 end
 
@@ -402,6 +450,7 @@ function RobotRig.place(self: RobotRig, pose: RobotSkeleton.Pose, root: CFrame, 
 		self.frames[base + index] = self.joints[kit.joint] * kit.placed
 	end
 	Workspace:BulkMoveTo(self.allParts, self.frames, Enum.BulkMoveMode.FireCFrameChanged)
+	RobotRig.stepGlow(self, os.clock())
 end
 
 return RobotRig

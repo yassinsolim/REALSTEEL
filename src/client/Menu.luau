@@ -398,7 +398,12 @@ local function sizeCard(card: Card, compact: boolean)
 	end
 end
 
-function Menu.new(gui: ScreenGui, send: (action: string, level: number?) -> (), openGarage: () -> ()): Menu
+function Menu.new(
+	gui: ScreenGui,
+	send: (action: string, level: number?) -> (),
+	openGarage: () -> (),
+	openScreen: (name: string) -> ()
+): Menu
 	-- A plain frame, not a CanvasGroup: a CanvasGroup draws its contents into a texture whose quality follows the
 	-- player's graphics setting, which left the whole card blurry on lower settings. The shade fades instead, and the card
 	-- slides in.
@@ -470,7 +475,16 @@ function Menu.new(gui: ScreenGui, send: (action: string, level: number?) -> (), 
 		closeMain()
 		openGarage()
 	end)
-	local leaveEntry = addEntry(main, 12, "LEAVE THE LINE", "", MUTED, pick("leave", nil))
+	local extrasRow = addRow(main, 12)
+	addTile(main, extrasRow, 1, "REWARDS", "The daily reward and today's contracts.", AMBER, function()
+		closeMain()
+		openScreen("rewards")
+	end)
+	addTile(main, extrasRow, 2, "CASES", "Core glows, strike trails, impact effects and titles.", TEAL, function()
+		closeMain()
+		openScreen("cases")
+	end)
+	local leaveEntry = addEntry(main, 13, "LEAVE THE LINE", "", MUTED, pick("leave", nil))
 	leaveEntry.button.Visible = false
 	local hint = label(
 		main.frame,
@@ -479,7 +493,7 @@ function Menu.new(gui: ScreenGui, send: (action: string, level: number?) -> (), 
 		11,
 		MUTED
 	)
-	hint.LayoutOrder = 13
+	hint.LayoutOrder = 14
 	hint.TextWrapped = true
 	hint.Size = UDim2.new(1, 0, 0, 30)
 	main.hint = hint

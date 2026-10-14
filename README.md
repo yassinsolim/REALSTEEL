@@ -14,7 +14,9 @@ pads in front of the main ring that start a fight for whoever stands on them, ev
 wall, and a line that hands each ring to whoever should have it. Robots wait hanging from winches
 under each ring's screen and are dropped onto the canvas when a match starts; wins go on the players' records, the
 all-time leaderboards hang on the north wall, and whoever holds the champion's title (won and defended in 1v1s) stands
-there as a gold statue.
+there as a gold statue. A daily reward (a seven-day streak), three contracts a day and cases full of cosmetics (core glows,
+strike trails, impact effects, titles and paint, each with its odds shown before anything is opened or bought) give
+players a reason to come back.
 Hit effects, lights and sound come with it.
 
 ## Where it lives
@@ -156,9 +158,10 @@ dummy walks in and grabs, to practice breaking throws.
 | Winches | `src/shared/Hoist.luau`; `src/client/Cranes.luau` | Pure: how high each ring's robots hang from their winches and where the hooks are, from the ring's match phase and frame; the client draws the cables and hooks. See The Foundry. |
 | Robot art | `art/`, `scripts/art.ps1` | Blender (headless) builds the five robot frames and their worn-metal textures, exports the FBX, and generates `src/shared/RobotRigs.luau`, `RobotClips.luau` and `RobotKits.luau`; the textures are wired up in `RobotWear.model.json`. See Robot art and animation. |
 | Garage | `src/shared/Loadout.luau`, `Looks.luau`, `RobotKits.luau`; `src/server/Garage.luau`; `src/client/GaragePanel.luau` | Chassis, modules and paint as small integer codes, the stats they derive, the frame and crest each is drawn with, the server's profile and the screen. See The garage. |
-| Shop | `src/shared/Shop.luau`; `src/server/Wallet.luau`; `scripts/products.ps1` | The cosmetic catalog and the coins matches pay; each player's coins and owned items, Robux receipts and coin purchases; the developer products. See The shop. |
+| Shop | `src/shared/Shop.luau`; `src/server/Wallet.luau`; `scripts/products.ps1` | The cosmetic catalog and the coins matches pay; each player's coins, owned items, unopened cases and reward records, Robux receipts and coin purchases; the developer products (shop items and case packs). See The shop. |
+| Rewards | `src/shared/DailyRewards.luau`, `Contracts.luau`, `Cases.luau`; `src/server/Rewards.luau`; `src/client/RewardScreens.luau` | Pure rules for the daily streak, the day's contracts and the cases (odds, pity, the draw); the server's `Rewards` remote, PolicyService gating and match reports; the CASES and REWARDS screens. See Rewards and cases. |
 | Animation | `src/shared/RobotSkeleton.luau`, `RobotAnimator.luau` | Pure Luau forward kinematics, clip sampling, and the mapping from simulation state to a pose. |
-| Presentation | `src/client/` | Draws and poses the robots in every ring (`FighterView`, `RobotRig`, and `Bays` for the robots in the garage bays), the camera (`CameraRig`), hit effects (`Effects`), sound (`Sfx`), HUD (`Hud`), the hall's PLAY button and line status (`LobbyHud`), the scoreboards over the rings (`Jumbotron`), the winches' cables and hooks (`Cranes`), the champion's statue (`Statue`) and the leaderboards (`Leaderboards`), menu (`Menu`), garage (`GaragePanel`), training overlay, touch controls, smoothing of rollback corrections. |
+| Presentation | `src/client/` | Draws and poses the robots in every ring (`FighterView`, `RobotRig`, and `Bays` for the robots in the garage bays), the camera (`CameraRig`), hit effects (`Effects`), sound (`Sfx`), HUD (`Hud`), the hall's PLAY, REWARDS and CASES buttons and line status (`LobbyHud`), the scoreboards over the rings (`Jumbotron`), the winches' cables and hooks (`Cranes`), the champion's statue (`Statue`) and the leaderboards (`Leaderboards`), menu (`Menu`), garage (`GaragePanel`), the reward screens (`RewardScreens`), training overlay, touch controls, smoothing of rollback corrections. |
 
 Server authority is enabled through `Workspace` properties in `default.project.json` (`AuthorityMode`, `UseFixedSimulation`,
 `NextGenerationReplication`, `PlayerScriptsUseInputActionSystem`, `StreamingEnabled`). Rules learned from the docs and tests:
@@ -184,6 +187,9 @@ Server authority is enabled through `Workspace` properties in `default.project.j
   Roblox's `CharacterContext` (every Studio test), and looks the humanoid and actions up outside the simulation. It sends
   no facing, so the hall's camera has no first person or shift lock (`CameraMinZoomDistance` 3, `EnableMouseLockOption`
   off in both project files): either would turn the character toward the camera on its own client only.
+- A replicated attribute holds at most 50 characters when it is a string (and an instance replicates its first 64
+  attributes); `SetAttribute` with a longer string throws on a server. Anything longer travels as a `StringValue` (the
+  leaderboards) or packed (`Owned`, see The shop).
 
 ## Look and feel
 
@@ -378,7 +384,8 @@ fights' netcode. Three fights can run at once: the main ring and two practice pi
   lives elsewhere, so it never rolls the clients back: a `FoundryState` folder in ReplicatedStorage with a folder per ring
   (`Session`, `NextUp`, `RematchOpen`, `HandoverAt`), a `Pads` folder with a folder per pad (`Holder`, the UserId on
   it, and `Ends`, when its countdown runs out in the server's clock), and on itself `Waiting`, the title (`ChampionId`,
-  `ChampionName`, `ChampionDefenses`) and the boards (`BoardVersus`, `BoardBots` as JSON, `BoardScope`); and attributes
+  `ChampionName`, `ChampionDefenses`) and `BoardScope`, with the boards themselves in two StringValues inside it
+  (`BoardVersus`, `BoardBots`, JSON lists too long for an attribute); and attributes
   on each Player (`QueueMode`, `QueueLevel`, `QueueAhead`, `QueueAlone`, `QueueRival` for the player they asked to fight
   on the 1V1 pads, `InRing`, `Ring` for the number of the ring they are in, `Bay`, and `RecordWins`, `RecordLosses`,
   `RecordHardWins`).
@@ -414,16 +421,16 @@ fights' netcode. Three fights can run at once: the main ring and two practice pi
   reached (Studio before the place is published) they rank the players in the server instead and say THIS SERVER. A
   player's scores go on the boards after each save of their record, again until they land, and once more when they join.
 
-The plan is to grow the hall in phases. Done: the hall, the pits, then spectacle and status (the drop, the champion and
-the leaderboards). Next comes the economy.
+The plan is to grow the hall in phases. Done: the hall, the pits, spectacle and status (the drop, the champion and the
+leaderboards), the economy (see The shop) and the reasons to come back (see Rewards and cases).
 
 ## The garage
 
 **GARAGE** (on the PLAY card, or E at your bay) opens a panel beside your robot in its bay, which turns in a slow close-up
 and wears every change at once. Everything that changes how a fight plays is a sidegrade, a gain with a cost, and open to
 everyone, so a build is a choice and not a rank. What a robot looks like is the part that is earned or bought: the SHOP
-sells premium bodies for Robux and crests for coins, which every match pays (see The shop below). Nothing for sale changes
-a fight.
+sells premium bodies for Robux and crests for coins, which every match pays (see The shop below), and cases hold core
+glows, strike trails, impact effects, titles and a few paints (see Rewards and cases). Nothing for sale changes a fight.
 
 | Chassis | Role | Gives | Costs |
 | --- | --- | --- | --- |
@@ -443,30 +450,38 @@ a fight.
 | Legs | SPRING GREAVES | +8% walking speed, dash recovers 1 frame faster | -10% kick damage |
 
 That is 5 x 3 x 3 x 3 = 135 builds, and ten ready-made ones, two per chassis, for a player who does not want to choose: STEEL
-WALL, CLEAN HANDS, BREAKWATER, IRON CURTAIN, SKIRMISHER, SNIPER, SHREDDER, GHOST, WRECKER and BRAWLER. Paint is 16 armor
-colors and 16 accent colors (the first of each is the side's own team color), four finishes (BRUSHED, MATTE, CHROME, GLOSS) and
-seven head crests (none, FIN, ANTENNA, HORNS and HALO for everyone, CROWN and MOHAWK from the shop). The opponent never wears
-colors too close to yours: `Looks.resolve` falls back to its team colors.
+WALL, CLEAN HANDS, BREAKWATER, IRON CURTAIN, SKIRMISHER, SNIPER, SHREDDER, GHOST, WRECKER and BRAWLER. Paint is 18 armor
+colors and 17 accent colors (the first of each is the side's own team color; PEARL, ROSE GOLD and ACID come from cases),
+four finishes (BRUSHED, MATTE, CHROME, GLOSS) and seven head crests (none, FIN, ANTENNA, HORNS and HALO for everyone,
+CROWN and MOHAWK from the shop). From cases come eight core glows (the eyes and lights; PULSE breathes and SPECTRUM runs
+through every hue), five strike trails, four impact effects (ARC, INFERNO with smoke, VOID with a ring, GOLD RUSH with
+coins) and seven titles shown under the player's name on their bay and in the ring; the first of each list (ACCENT,
+STANDARD, NONE) is everyone's. The opponent never wears colors too close to yours: `Looks.resolve` falls back to its
+team colors.
 
 - **How a build travels.** `Loadout.encode` turns a choice into one integer (1 to 135) that the server sets on each fighter's
   `Core` as the attribute `Loadout`. `Simulation` derives `fighter.stats` from it (`Loadout.stats`, built once per code), and
   the sim, `FrameData`, the animator and the bot all read those stats instead of global constants, so the server and every
   predicting client play identical numbers and a rollback with different builds stays deterministic. A stock ANVIL plays
-  exactly as it did before the garage existed. A look is one integer (1 to 14336) on the fighter's model, the attribute
-  `Look`: the body, the paint, the finish and the crest. Saves keep each choice on its own, so the code may change as the
-  lists grow.
-- **The server.** `src/server/Garage.luau` owns the `Garage` remote. A client sends its whole garage (`"set"` and the nine
-  choices); the server sanitizes every number, accepts one request per 0.1 s per player, publishes the result on the player
+  exactly as it did before the garage existed. A look is one integer (1 to 111,041,280) on the fighter's model, the
+  attribute `Look`: the body, the paint, the finish, the crest, the core glow, the strike trail, the impact effect and the
+  title. Saves keep each choice on its own, so the code may change as the lists grow.
+- **The server.** `src/server/Garage.luau` owns the `Garage` remote. A client sends its garage (`"set"` and any of the
+  thirteen choices; the ones it leaves out keep their value); the server sanitizes every number, accepts one request per
+  0.1 s per player, publishes the result on the player
   (`GarageLoadout`, `GarageLook`), and saves it to the DataStore `RealSteelGarage1` (batched, at most every 15 s, and when the
-  player leaves or the server shuts down). A pick of a shop item the player does not own is kept, so it goes on the moment
-  they buy it, but what is published and what their fighter wears leave it off (`Looks.strip`). It loads the saved garage
-  when the player joins. A change reaches the fighter
+  player leaves or the server shuts down). A pick of a shop or case item the player does not own is kept, so it goes on the
+  moment they get it, but what is published and what their fighter wears leave it off (`Looks.strip`). It loads the saved
+  garage when the player joins. A change reaches the fighter
   when the player's next turn in the ring starts, so a match in progress keeps its robots. The bots take theirs from
   `Loadout.botChoice`: EASY the stock ANVIL, MEDIUM a random stock chassis, HARD a random ready-made build. Where DataStores
   are unreachable (an unpublished place without Studio API access) saving is off, with one warning, and the garage still
   works for the session.
 - **The screen.** `GaragePanel` and `GarageWidgets` have four pages: BUILD (five rating bars, then the chassis and each
-  module, with its gains as solid green dots and its costs as red rings), PRESETS, PAINT and SHOP. The panel is a column beside
+  module, with its gains as solid green dots and its costs as red rings), PRESETS, PAINT and SHOP. PAINT ends with the case
+  items, an OPEN CASES button and a line on where they come from; a case item the player does not own yet carries a dot in
+  its rarity's color, and tapping it tries it on (the robot wears it until the next pick or until the page is left, and
+  the heading names its rarity) instead of picking it. The panel is a column beside
   the robot on wide views, a sheet along the bottom on tall narrow ones, and tighter on touch. The robot wears each pick at
   once; the panel sends it at most every 0.2 s and keeps asking until the server's published copy matches, giving up after
   4 s. `CameraRig` has a garage mode that sways a little around the robot's front with a lens shift, so the robot stands in
@@ -491,8 +506,9 @@ colors too close to yours: `Looks.resolve` falls back to its team colors.
 
 ### The shop
 
-Everything for sale is cosmetic and sold directly, never as a loot box. A premium body draws a chassis as another robot
-with the same size, reach and stats; a crest only sits on the head.
+Everything for sale is cosmetic. The shop sells its items directly; cases are random and work differently (see Rewards
+and cases). A premium body draws a chassis as another robot with the same size, reach and stats; a crest only sits on the
+head.
 
 | Item | What | Price |
 | --- | --- | --- |
@@ -512,14 +528,18 @@ crest on the PAINT page that is not owned yet carries an amber mark, and picking
 
 - **The catalog.** `src/shared/Shop.luau` lists the items (an id, which wallets keep and so never changes once shipped; a
   kind; a price in coins or Robux) and the coin rewards. `Looks.Bodies` and `Looks.CrestItems` say which body or crest an
-  item unlocks. A Robux item is a developer product: `.\scripts\products.ps1` creates the product for every Robux item that
-  has none (`product = 0`), at its `robux` price, and writes the product ID into `Shop.luau`; it reuses a product with the
-  same name, so it can be run again. It needs the key's "developer-product" API with Read and Write. An item without a
-  product shows SOON and cannot be bought.
-- **The wallet.** `src/server/Wallet.luau` keeps each player's coins and owned items in the DataStore `RealSteelWallet1`
-  and publishes them on the player (`Coins`; `Owned`, the ids comma separated; and `WalletReady`, whether the stored wallet
-  has been read). Like a record, coins are saved as additions in one `UpdateAsync`, batch-numbered per server, so a retry
-  is never added twice and two servers never write over each other. A Robux purchase arrives through
+  item unlocks. A Robux item is a developer product: `.\scripts\products.ps1` creates the product for every Robux item and
+  every case pack (`Cases.List`) that has none (`product = 0`), at its `robux` price, and writes the product ID into
+  `Shop.luau` or `Cases.luau`; it reuses a product with the same name, so it can be run again. It needs the key's
+  "developer-product" API with Read and Write. An item without a product shows SOON and cannot be bought.
+- **The wallet.** `src/server/Wallet.luau` keeps each player's coins, owned items, unopened cases and the rewards' records
+  (the daily streak, the day's contracts, each case's pity counter) in the DataStore `RealSteelWallet1`, and publishes on
+  the player `Coins`, `Owned` and `WalletReady` (whether the stored wallet has been read). `Owned` is packed, one bit per
+  item in `Looks.items()` and six to a character (`Shop.formatOwned`, `Shop.parseOwned`), because a replicated string
+  attribute holds at most 50 characters and a list of ids would pass that with a handful of items; it fits 300 items.
+  Like a record, coins and cases are saved as additions in one `UpdateAsync`, batch-numbered per server, so a retry
+  is never added twice and two servers never write over each other; the records are replaced, the latest write winning.
+  A Robux purchase arrives through
   `MarketplaceService.ProcessReceipt`: it is granted inside one `UpdateAsync` that also records its PurchaseId, and Roblox
   is told the purchase went through only once that write has landed, so a receipt tried again (after a lost reply, or on
   another server) is not granted twice, a failed write is retried by Roblox later (the buyer has the item for the session
@@ -527,7 +547,9 @@ crest on the PAINT page that is not owned yet carries an amber mark, and picking
   and an item id, one request per 0.5 s) and are written at once. Until the stored wallet has been read nothing is sold
   (the player might own it already): the shop shows LOADING and the read is tried again every 15 s; a Robux item paid for
   shows PENDING until its grant arrives, so it is never offered twice. The garage asks the wallet what a player owns and
-  dresses them again whenever that changes. Ids the shop no longer sells stay in a wallet. Where DataStores are
+  dresses them again whenever that changes. Ids the shop no longer sells stay in a wallet, and so do cases, pity counters
+  and records a newer version of the game added, so a server still running an older one never writes them away. Where
+  DataStores are
   unreachable (an unpublished place, or Studio without access to API services), coins and purchases last for the session;
   test purchases in Studio are free.
 - **Adding an item.** A crest: its kit in `art/kits.py`, its name and kit at the end of `Looks.Crests`, `Looks.CrestKits`
@@ -537,6 +559,43 @@ crest on the PAINT page that is not owned yet carries an amber mark, and picking
   entry at the end of `Looks.Bodies` and the item in `Shop.Items`, then `.\scripts\products.ps1`. `RobotSpec` checks the
   body's frame, that its strikes reach at its chassis' size, and that it is uploaded with textures for every finish;
   `LoadoutSpec` checks the catalog.
+
+## Rewards and cases
+
+Two buttons sit beside PLAY in the hall, and two tiles on the PLAY card: **REWARDS** (marked while the day's reward waits)
+and **CASES** (with the number of unopened cases). Both screens (`src/client/RewardScreens.luau`) only ask the server
+(`src/server/Rewards.luau`, the `Rewards` remote: `sync`, `daily`, `open`, `buy`) and show what it sends back (`state`,
+`opened`, `notice`). Nothing pops up when a player joins; the buttons carry the marks.
+
+- **The daily reward.** Seven days: 75, 100, 150, 200, 250 and 300 coins, then a FOUNDRY CASE and 100 coins on the
+  seventh, and round again. A new reward every day at 00:00 UTC; a missed day starts the streak over
+  (`src/shared/DailyRewards.luau`).
+- **Contracts.** Three a day for each player, one from each group (play 3 or 5 matches, beat 2 or 4 bots, beat a MEDIUM
+  or a HARD bot), so they can always be finished alone, against the bots, however empty the server; a 1v1 counts as a
+  match played. They pay 80 to 200 coins, and all three pay 100 more. Training and exhibitions count for none. The picks
+  come from the player's id and the day, so they are the same on every server (`src/shared/Contracts.luau`).
+- **Cases.** The FOUNDRY CASE holds 27 items: COMMON 60% (8 items, 7.5% each), RARE 25% (8, 3.125% each), EPIC 10% (5, 2%
+  each), LEGENDARY 4% (4, 1% each) and MYTHIC 1% (2, 0.5% each). It opens for 500 coins or with an unopened case (from the
+  seventh daily reward, or bought). The case screen lists every rarity's and every item's chance before anything is opened
+  or bought, from the same table that decides the draw (`Cases.outcomes`, `Cases.draw`). **Pity:** after 29 opens in a
+  row without a LEGENDARY or MYTHIC, the next draws only those two, in proportion to their odds (80% and 20%); the screen
+  shows how close it is. **Duplicates** turn into coins (COMMON 50, RARE 120, EPIC 300, LEGENDARY 900, MYTHIC 2,500), which
+  the screen says too. Opening plays a reel that stops on what the server drew (the cards it runs past are drawn at the
+  same odds), then offers EQUIP, OPEN ANOTHER and DONE. A LEGENDARY or MYTHIC is announced to the rest of the hall.
+- **Robux, and Roblox's rules for paid random items.** Packs of one case (99 Robux) and five (399 Robux) are developer
+  products, and a case bought with Robux is a paid random item. So every item's odds are shown before purchase and add up
+  to exactly 100%, the pity and the duplicate refunds are explained in numbers, and the server asks `PolicyService` about
+  each player: one for whom `ArePaidRandomItemsRestricted` is true (or whose answer has not come, or failed) is never shown
+  the packs nor prompted (the prompt is the server's own, on `"buy"`), and is told cases come from coins and the daily
+  reward instead. Coins cannot be bought, so a case opened with coins is not a paid one. A pack is granted like any
+  purchase, once per PurchaseId (see The shop).
+- **Where it is kept.** In the wallet (see The shop): the cases as counts added like coins, and the daily streak, the
+  day's contracts and each case's pity counter as records. Opening spends the case or the coins and grants the item in one
+  change, saved at once.
+- **Adding items or a case.** An item is a choice in one of the look's lists (`Looks.Armor`, `Accents`, `Glows`, `Trails`,
+  `Impacts`, `Titles`) with an `item` id, put in one rarity's list of a case in `Cases.List`; the garage shows it with its
+  rarity's dot. A new case also needs its packs' products (`.\scripts\products.ps1`). `CasesSpec` checks the odds, the
+  draw, the pity and the packs; `RewardsSpec` the daily cycle and the contracts.
 
 ## Robot art and animation
 
@@ -643,12 +702,23 @@ knuckle plates). The designs are original: robot boxers in general are fair game
   that they break throws (EASY never), take apart an opponent who only guards, punish a broken guard and stop blocking
   when a block would break them, that a jab masher loses to EASY and not to HARD, that a whole bot-vs-bot match
   finishes, and that the levels are ordered (73 checks).
-  `LoadoutSpec` covers the garage's data: the catalog, the codes (all 135 loadouts and every paint code survive a round
-  trip, nonsense reads as the stock ANVIL), the stats each part derives, the plain-language gain and cost lines, build names,
-  that the simulation, the frame data and the bot play each fighter by its own stats, that a timed-out round goes to the
-  fuller health bar, the paint rules, which frame and crest a build and a look are drawn with, premium bodies (one for every
-  chassis, each a frame of its own sold for Robux) and what a look keeps of the shop items its wearer does not own, and the
-  shop's catalog, prices and coin rewards (156 checks).
+  `LoadoutSpec` covers the garage's data: the catalog, the codes (all 135 loadouts survive a round trip, and a sample of
+  every kind of look code; nonsense reads as the stock ANVIL), the stats each part derives, the plain-language gain and
+  cost lines, build names, that the simulation, the frame data and the bot play each fighter by its own stats, that a
+  timed-out round goes to the fuller health bar, the paint rules, which frame and crest a build and a look are drawn with,
+  premium bodies (one for every chassis, each a frame of its own sold for Robux) and what a look keeps of the shop and case
+  items its wearer does not own, the shop's catalog, prices and coin rewards, and the packed `Owned` attribute (every shop
+  and case item in the catalog, each reading back alone and with everything else, owning everything still under 50
+  characters) (171 checks).
+  `CasesSpec` covers the cases (`Cases`): five rarities whose chances add up to exactly 100 and grow rarer and more
+  valuable, the odds shown matching what the draw does over many rolls, every item able to come out, the pity (the usual
+  odds before it, only LEGENDARY and MYTHIC when it is due, reset by either, and a guarantee within every 30 opens even
+  with the worst luck), the packs each having a product of their own, and the stored counts cleaned, keeping a case a newer
+  version added (31 checks).
+  `RewardsSpec` covers the daily reward and the contracts: UTC days, the seven-day cycle ending in a case, claiming once a
+  day, the streak counting on and starting over after a missed day, damaged saves, contracts the same all day for a
+  player, one per group and every one doable alone, what counts toward each (no losses where a win is asked, no training,
+  a 1v1 as a match played), each paying once and the bonus once (31 checks).
   `QueueSpec` covers the line for the rings, on one ring and on the hall's three: a bot match starting at once, a 1v1
   pairing the two earliest 1v1 players in order, a lone 1v1 waiter not holding up the line, changing what you wait for
   keeping your place, leaving the game ending the session in your ring and no other, practice filling the pits before the
@@ -685,8 +755,8 @@ knuckle plates). The designs are original: robot boxers in general are fair game
   Studio, so `.\scripts\run-specs.ps1 -Luau <path to luau.exe>` runs them with the standalone interpreter (it stands in a
   small Vector3, CFrame and Vector2 for the layout). Run any of them in Studio's command bar with
   `require(game.ReplicatedStorage.Tests.BotSpec)()` (or `RobotSpec`, `FightSimSpec`, `LoadoutSpec`, `QueueSpec`,
-  `LayoutSpec`, `PadSpec`, `StandingsSpec`, `HoistSpec`); it returns the pass count and failures. Clone the module first
-  to avoid a cached result after edits.
+  `LayoutSpec`, `PadSpec`, `StandingsSpec`, `HoistSpec`, `CasesSpec`, `RewardsSpec`); it returns the pass count and
+  failures. Clone the module first to avoid a cached result after edits.
 - **Garage screen:** `GarageSpec` needs Studio in Edit mode, because it lays real UI out. It checks what each button does, that
   the panel sends a pick once and again until the server agrees, that quick picks go as one, that a pick the server never
   confirms is given up and a saved garage that arrives late is followed, and, on a desktop view, a phone and a tall narrow
@@ -695,7 +765,10 @@ knuckle plates). The designs are original: robot boxers in general are fair game
   an item on (a body with its chassis) without sending anything, buying with Robux only when the item has a product,
   buying with coins only when there are enough, putting a bought item on once the server says it is owned, equipping and
   unequipping, the marks on the crests not owned yet and picking one opening the shop, nothing sold before the wallet is
-  known, and a Robux item never prompted twice in a row or while its purchase is on its way (126 checks).
+  known, and a Robux item never prompted twice in a row or while its purchase is on its way. The PAINT page's case items:
+  a mark on every one not owned yet (gone once it is), one not owned tried on rather than put on and taken off by a second
+  tap, one owned put on and sent, and trying stopping when the page is left; and the grids laid out as their lists say
+  (131 checks).
   Run `require(game.ReplicatedStorage.Tests.GarageSpec:Clone())()`; it builds its own copies of what it tests and cleans up.
 - **Garage server:** `GarageServerSpec` (Studio, Edit mode, 37 checks) runs `src/server/Garage.luau` against a stand-in
   DataStore and stand-in players. It checks that a request is cleaned (out-of-range numbers, NaN, infinity, words, other
@@ -704,7 +777,7 @@ knuckle plates). The designs are original: robot boxers in general are fair game
   and when the player leaves, that a saved garage (even a damaged one) is loaded, that a pick made while the save is being
   read wins, and that a player wears only the shop items they own, and wears a kept pick as soon as they buy it. Run it
   like `GarageSpec`.
-- **Wallets:** `WalletSpec` (Studio, Edit mode, 65 checks) runs `src/server/Wallet.luau` against a stand-in store that can
+- **Wallets:** `WalletSpec` (Studio, Edit mode, 94 checks) runs `src/server/Wallet.luau` against a stand-in store that can
   fail a read or a write, or lose a reply. It checks that a stored wallet is read and cleaned, that matches pay by mode and
   level and nothing for practice, that coins are saved as additions alongside another server's, never twice after a lost
   reply and never lost after a failed write, that a payout never cancels the price of a coin purchase still waiting to be
@@ -712,8 +785,13 @@ knuckle plates). The designs are original: robot boxers in general are fair game
   twice, the remote's checks and cooldown), that a Robux purchase is granted once however often its receipt comes back,
   only after its write has landed (the buyer having it for the session meanwhile), for a buyer who is not in the server
   too, and for the session without a store, and that a wallet that cannot be read sells nothing until a later read works
-  (or, in Studio, lasts for the session). Run it like `GarageSpec`.
-- **Records server:** `RecordsSpec` (Studio, Edit mode, 62 checks) runs `src/server/Records.luau` against stand-in record
+  (or, in Studio, lasts for the session). For the rewards: a change of coins, cases, items and records shows at once and is
+  saved as an addition, a change's unknown cases and records are dropped, views are copies, a pack of cases is granted
+  once per receipt and counted once while the wallet catches up (after a failed write and a lost reply too, and for a
+  buyer who is not there), a case from a pack is spent by opening it before the wallet has caught up (with a store and
+  without), cases, counters and records a newer version wrote are kept when this one saves, and `Owned` stays one short
+  attribute however much a player owns. Run it like `GarageSpec`.
+- **Records server:** `RecordsSpec` (Studio, Edit mode, 63 checks) runs `src/server/Records.luau` against stand-in record
   and board stores and stand-in players. It checks that a saved record arrives with what was won while it loaded, that
   1v1s and bot matches count (from either seat, by level) and training and exhibitions do not, that the title moves as
   the rules say and falls vacant when the champion leaves, that a record and both boards are written when a player
@@ -722,7 +800,8 @@ knuckle plates). The designs are original: robot boxers in general are fair game
   still counts but gives no title to a winner who has left, that a board write that failed is tried again and a joining
   player's stored scores are put on the boards once, that a record still loading, or one that could never be read, is
   never written over the save, that the boards come from the stores or, when those cannot be read, from the server's
-  players, and that reporting a result never waits on a slow store. Run it like `GarageSpec`.
+  players (published in StringValues, with no attribute too long to replicate), and that reporting a result never waits
+  on a slow store. Run it like `GarageSpec`.
 - **Multiplayer checks:** open `build\REALSTEEL-checks.rbxlx`, which adds `tests/StudioChecks.*.luau` to the game, and run
   this in the command bar in Edit mode. At the end every client reports every ring: a ring that holds still by then (the
   scenario's own rings once their fights settle, and idle rings) has to match the server's in full, and a ring that is
@@ -824,11 +903,13 @@ and keeps a one-line readout in the bottom left corner. Other players run nothin
    then. Look at the garage on a real screen first: the panel has only been checked by measurement (`GarageSpec`), not by
    eye.
 4. Progression, which is what brings people back. The garage is built for it: gameplay parts are sidegrades open to
-   everyone. The shop and its coins exist now (see The shop): a premium body for every chassis and two coin crests. Next:
-   more premium bodies, liveries and finishes, hit effects and victory emotes for Robux and for coins,
-   mastery with a chassis, ranked play with ratings, and a daily challenge that hands out a limited look. Robux items stay
-   cosmetic and are sold directly, never as loot boxes. Try a test purchase in Studio on the published place (free there):
-   the local checks place is not tied to the experience, so Roblox will not prompt a purchase in it.
+   everyone. The shop, its coins, the daily reward, contracts and cases exist now (see The shop and Rewards and cases).
+   Next: more cases and case items (crests, finishes, victory emotes), a season pass with free and paid tracks, mastery
+   with a chassis, ranked play with ratings, 1v1 contracts (kept out of the daily three so those can always be finished
+   alone: a weekly one, or one offered while another player is in the server), Experience Notifications when the daily
+   reward or a full streak waits, and limited-time looks. Robux items stay cosmetic; cases keep their odds on screen and
+   stay behind PolicyService. Try a test purchase in Studio on the published place (free there): the local checks place is
+   not tied to the experience, so Roblox will not prompt a purchase in it.
 5. Add a launcher and juggle rules, wall interactions, and crouching or airborne states (the sim has no hit height yet, so
    there are no lows or overheads; the guard bar and the throw are what keep a guard honest for now). Tune the guard bar
    and the throw by playing: `FightConfig.Guard` and `FightConfig.Throw`. Each new move needs a clip in `art/poses.py`;

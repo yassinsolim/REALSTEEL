@@ -12,10 +12,11 @@
 -- between the two. Where DataStores cannot be reached (Studio before the place is published) the boards rank the players
 -- in the server instead.
 --
--- What the clients show is published as attributes on `state` (FoundryState):
+-- What the clients show is published on `state` (FoundryState), as attributes:
 --   ChampionId, ChampionName, ChampionDefenses   the title (0, "" and 0 while it is vacant)
---   BoardVersus, BoardBots                        JSON lists of { id, name, score }, best first: 1v1 wins, HARD bot wins
 --   BoardScope                                    "ALL TIME", or "THIS SERVER" while the all-time boards are out of reach
+-- and as StringValues, since a replicated attribute holds at most 50 characters in a place with server authority:
+--   BoardVersus, BoardBots                        JSON lists of { id, name, score }, best first: 1v1 wins, HARD bot wins
 -- and on each Player: RecordWins and RecordLosses (1v1s) and RecordHardWins.
 
 local DataStoreService = game:GetService("DataStoreService")
@@ -259,9 +260,21 @@ function Records.new(state: Instance, options: Options?): Records
 		return Standings.rank(versus, BOARD_SIZE), Standings.rank(bots, BOARD_SIZE)
 	end
 
+	-- A board's list, as the value of a StringValue under `state` (made the first time).
+	local function boardValue(name: string): StringValue
+		local existing = state:FindFirstChild(name)
+		if existing ~= nil and existing:IsA("StringValue") then
+			return existing
+		end
+		local value = Instance.new("StringValue")
+		value.Name = name
+		value.Parent = state
+		return value
+	end
+
 	local function publishBoards(versus: { Standings.Entry }, bots: { Standings.Entry }, scope: string)
-		state:SetAttribute("BoardVersus", encode(versus))
-		state:SetAttribute("BoardBots", encode(bots))
+		boardValue("BoardVersus").Value = encode(versus)
+		boardValue("BoardBots").Value = encode(bots)
 		state:SetAttribute("BoardScope", scope)
 	end
 

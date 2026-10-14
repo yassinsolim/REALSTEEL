@@ -41,7 +41,7 @@ function Invoke-Typecheck {
         }
     }
 
-    Invoke-ProjectTool luau-lsp @('analyze', '--platform=roblox', '--sourcemap=sourcemap.json', "--definitions=$definitionsPath", 'src', 'tests/FightSimSpec.luau', 'tests/RobotSpec.luau', 'tests/BotSpec.luau', 'tests/LoadoutSpec.luau', 'tests/GarageSpec.luau', 'tests/GarageServerSpec.luau', 'tests/QueueSpec.luau', 'tests/LayoutSpec.luau', 'tests/PadSpec.luau', 'tests/StandingsSpec.luau', 'tests/HoistSpec.luau', 'tests/RecordsSpec.luau')
+    Invoke-ProjectTool luau-lsp @('analyze', '--platform=roblox', '--sourcemap=sourcemap.json', "--definitions=$definitionsPath", 'src', 'tests/FightSimSpec.luau', 'tests/RobotSpec.luau', 'tests/BotSpec.luau', 'tests/LoadoutSpec.luau', 'tests/GarageSpec.luau', 'tests/GarageServerSpec.luau', 'tests/QueueSpec.luau', 'tests/LayoutSpec.luau', 'tests/PadSpec.luau', 'tests/StandingsSpec.luau', 'tests/HoistSpec.luau', 'tests/RecordsSpec.luau', 'tests/CasesSpec.luau', 'tests/RewardsSpec.luau')
 }
 
 function Invoke-Build {

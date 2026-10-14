@@ -1,9 +1,9 @@
 --!strict
 
--- Client: the two leaderboards on the north wall (see Foundry's buildBoards). The server publishes each as a JSON list on
--- FoundryState (BoardVersus, BoardBots) of { id, name, score }, best first, with BoardScope saying whether they are
--- all-time or this server's (see Records). Drawn locally on SurfaceGuis; the local player's own line is picked out by
--- their UserId, since display names are not unique.
+-- Client: the two leaderboards on the north wall (see Foundry's buildBoards). The server publishes each as a JSON list in a
+-- StringValue under FoundryState (BoardVersus, BoardBots) of { id, name, score }, best first, with the attribute
+-- BoardScope saying whether they are all-time or this server's (see Records). Drawn locally on SurfaceGuis; the local
+-- player's own line is picked out by their UserId, since display names are not unique.
 
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
@@ -26,7 +26,8 @@ type Row = {
 }
 
 type Panel = {
-	attribute: string,
+	-- The StringValue under FoundryState that holds this board's list.
+	source: string,
 	scope: TextLabel,
 	empty: TextLabel,
 	rows: { Row },
@@ -97,7 +98,7 @@ local function newPanel(part: BasePart, board: FoundryLayout.Board, gui: Instanc
 		score.TextXAlignment = Enum.TextXAlignment.Right
 		rows[index] = { frame = frame, rank = rank, name = name, score = score }
 	end
-	return { attribute = board.name, scope = scope, empty = empty, rows = rows, shown = "" }
+	return { source = board.name, scope = scope, empty = empty, rows = rows, shown = "" }
 end
 
 function Leaderboards.new(state: Instance): Leaderboards
@@ -118,7 +119,8 @@ function Leaderboards.new(state: Instance): Leaderboards
 	end)
 
 	local function draw(panel: Panel)
-		local raw = state:GetAttribute(panel.attribute)
+		local holder = state:FindFirstChild(panel.source)
+		local raw = if holder ~= nil and holder:IsA("StringValue") then holder.Value else nil
 		local scope = state:GetAttribute("BoardScope")
 		local key = `{raw}|{scope}`
 		if key == panel.shown then

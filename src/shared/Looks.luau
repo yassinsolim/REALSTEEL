@@ -1,17 +1,34 @@
 --!strict
 
--- The cosmetic side of the garage: paint, finishes, head crests and premium bodies, how a look travels as one number,
--- which robot frame and add-on kits a loadout and a look put on the robot, and how the two fighters' colors are kept apart
--- on screen. Pure data and arithmetic like Loadout (colors are plain 0-255 numbers, not Color3), so it runs anywhere and
--- can be tested without Roblox. Nothing here changes how a fight plays. Some crests and every premium body are shop items
--- (see Shop); the server only lets a player wear the ones they own (see `strip`).
+-- The cosmetic side of the garage: paint, finishes, head crests, premium bodies, core glows, strike trails, impact effects
+-- and titles, how a look travels as one number, which robot frame and add-on kits a loadout and a look put on the robot,
+-- and how the two fighters' colors are kept apart on screen. Pure data and arithmetic like Loadout (colors are plain 0-255
+-- numbers, not Color3), so it runs anywhere and can be tested without Roblox. Nothing here changes how a fight plays. Some
+-- crests and every premium body are shop items (see Shop), the glows, trails, impacts, titles and a few paints come from
+-- cases (see Cases); the server only lets a player wear the ones they own (see `strip`).
 
 local Loadout = require(script.Parent.Loadout)
 
 export type Rgb = { number }
 
--- A swatch without a color stands for the side's own team color.
-export type Swatch = { name: string, color: Rgb? }
+-- A swatch without a color stands for the side's own team color. A swatch with an item is a case item (see Cases): only
+-- its owners may wear it.
+export type Swatch = { name: string, color: Rgb?, item: string? }
+
+-- The robot's core glow (its eyes and lights). The first follows the accent color; the others are case items. An
+-- animated glow changes over time (see RobotRig): "pulse" breathes in and out, "spectrum" runs through every hue.
+export type Glow = { name: string, color: Rgb?, animation: string?, item: string? }
+
+-- The trails behind a striking fist or foot: from a hot core (`from`) to a color (`to`), or through every hue. The first
+-- runs from white to the accent color.
+export type Trail = { name: string, from: Rgb?, to: Rgb?, animation: string?, item: string? }
+
+-- How the player's hits burst: the standard sparks in the hit color, or a case item's color with a flair on top ("smoke",
+-- "ring" or "coins", see Effects).
+export type Impact = { name: string, color: Rgb?, flair: string?, item: string? }
+
+-- A title shown under the player's name, on their bay and in the ring. The first is none.
+export type Title = { name: string, item: string? }
 
 export type Finish = {
 	name: string,
@@ -36,6 +53,10 @@ export type Look = {
 	finish: number,
 	crest: number,
 	body: number,
+	glow: number,
+	trail: number,
+	impact: number,
+	title: number,
 }
 
 export type Resolved = {
@@ -43,6 +64,9 @@ export type Resolved = {
 	accent: Rgb,
 	finish: Finish,
 	crest: number,
+	glow: Glow,
+	trail: Trail,
+	impact: Impact,
 }
 
 local Looks = {}
@@ -71,9 +95,13 @@ Looks.Armor = {
 	{ name = "OCEAN", color = { 36, 92, 132 } },
 	{ name = "MOSS", color = { 84, 104, 62 } },
 	{ name = "FOREST", color = { 34, 74, 56 } },
+	-- Case items from here on.
+	{ name = "PEARL", color = { 232, 226, 214 }, item = "armor.pearl" },
+	{ name = "ROSE GOLD", color = { 198, 136, 116 }, item = "armor.rosegold" },
 } :: { Swatch }
 
--- The trim, the glowing eyes and core, and the sparks and trails all follow this color.
+-- The trim, the glowing eyes and core, and the sparks and trails all follow this color, unless the look picks a core glow,
+-- a strike trail or an impact of its own.
 Looks.Accents = {
 	{ name = "TEAM" },
 	{ name = "ICE", color = { 80, 200, 255 } },
@@ -91,7 +119,59 @@ Looks.Accents = {
 	{ name = "WHITE", color = { 240, 244, 255 } },
 	{ name = "GOLD", color = { 230, 190, 90 } },
 	{ name = "SILVER", color = { 190, 200, 215 } },
+	-- Case items from here on.
+	{ name = "ACID", color = { 196, 255, 48 }, item = "accent.acid" },
 } :: { Swatch }
+
+Looks.Glows = {
+	{ name = "ACCENT" },
+	{ name = "ARC WHITE", color = { 236, 244, 255 }, item = "glow.arcwhite" },
+	{ name = "TOXIC", color = { 120, 255, 80 }, item = "glow.toxic" },
+	{ name = "PLASMA", color = { 186, 104, 255 }, item = "glow.plasma" },
+	{ name = "SOLAR", color = { 255, 206, 72 }, item = "glow.solar" },
+	{ name = "BLOOD MOON", color = { 255, 44, 58 }, item = "glow.bloodmoon" },
+	{ name = "DEEP SEA", color = { 36, 140, 255 }, item = "glow.deepsea" },
+	{ name = "PULSE", color = { 255, 120, 56 }, animation = "pulse", item = "glow.pulse" },
+	{ name = "SPECTRUM", animation = "spectrum", item = "glow.spectrum" },
+} :: { Glow }
+
+Looks.Trails = {
+	{ name = "ACCENT" },
+	{ name = "FROST", from = { 255, 255, 255 }, to = { 96, 206, 255 }, item = "trail.frost" },
+	{ name = "EMBER", from = { 255, 232, 150 }, to = { 255, 84, 28 }, item = "trail.ember" },
+	{ name = "VENOM", from = { 226, 255, 150 }, to = { 64, 210, 70 }, item = "trail.venom" },
+	{ name = "SHADOW", from = { 196, 150, 255 }, to = { 40, 12, 70 }, item = "trail.shadow" },
+	{ name = "PRISM", animation = "spectrum", item = "trail.prism" },
+} :: { Trail }
+
+Looks.Impacts = {
+	{ name = "STANDARD" },
+	{ name = "ARC", color = { 120, 204, 255 }, item = "impact.arc" },
+	{ name = "INFERNO", color = { 255, 104, 30 }, flair = "smoke", item = "impact.inferno" },
+	{ name = "VOID", color = { 168, 78, 255 }, flair = "ring", item = "impact.void" },
+	{ name = "GOLD RUSH", color = { 255, 198, 64 }, flair = "coins", item = "impact.goldrush" },
+} :: { Impact }
+
+Looks.Titles = {
+	{ name = "NONE" },
+	{ name = "SCRAPPER", item = "title.scrapper" },
+	{ name = "GEARHEAD", item = "title.gearhead" },
+	{ name = "BRAWLER", item = "title.brawler" },
+	{ name = "IRON FIST", item = "title.ironfist" },
+	{ name = "HEAVYWEIGHT", item = "title.heavyweight" },
+	{ name = "THE MACHINE", item = "title.themachine" },
+	{ name = "UNBREAKABLE", item = "title.unbreakable" },
+} :: { Title }
+
+-- What each kind of case item is called, by the prefix of its id.
+Looks.KindNames = {
+	armor = "ARMOR PAINT",
+	accent = "ACCENT PAINT",
+	glow = "CORE GLOW",
+	trail = "STRIKE TRAIL",
+	impact = "IMPACT FX",
+	title = "TITLE",
+}
 
 Looks.Finishes = {
 	{ name = "BRUSHED", material = "Metal", reflectance = 0 },
@@ -131,7 +211,7 @@ local function clampIndex(value: unknown, count: number): number
 end
 
 function Looks.default(): Look
-	return { armor = 1, accent = 1, finish = 1, crest = 1, body = 1 }
+	return { armor = 1, accent = 1, finish = 1, crest = 1, body = 1, glow = 1, trail = 1, impact = 1, title = 1 }
 end
 
 -- Whatever a client or a save file says, as a valid look.
@@ -143,20 +223,44 @@ function Looks.sanitize(raw: unknown): Look
 		finish = clampIndex(source.finish, #Looks.Finishes),
 		crest = clampIndex(source.crest, #Looks.Crests),
 		body = clampIndex(source.body, #Looks.Bodies),
+		glow = clampIndex(source.glow, #Looks.Glows),
+		trail = clampIndex(source.trail, #Looks.Trails),
+		impact = clampIndex(source.impact, #Looks.Impacts),
+		title = clampIndex(source.title, #Looks.Titles),
+	}
+end
+
+-- The choices in the order a code packs them, most significant first, with the length of each one's list.
+local function dimensions(): { { key: string, count: number } }
+	return {
+		{ key = "title", count = #Looks.Titles },
+		{ key = "impact", count = #Looks.Impacts },
+		{ key = "trail", count = #Looks.Trails },
+		{ key = "glow", count = #Looks.Glows },
+		{ key = "body", count = #Looks.Bodies },
+		{ key = "armor", count = #Looks.Armor },
+		{ key = "accent", count = #Looks.Accents },
+		{ key = "finish", count = #Looks.Finishes },
+		{ key = "crest", count = #Looks.Crests },
 	}
 end
 
 function Looks.codeCount(): number
-	return #Looks.Bodies * #Looks.Armor * #Looks.Accents * #Looks.Finishes * #Looks.Crests
+	local count = 1
+	for _, dimension in dimensions() do
+		count *= dimension.count
+	end
+	return count
 end
 
 -- A look travels as one number from 1, the same way a loadout does. (Saves keep each choice on its own, so the codes may
 -- change as the lists grow.)
 function Looks.encode(look: Look): number
-	local index = (look.body - 1) * #Looks.Armor + (look.armor - 1)
-	index = index * #Looks.Accents + (look.accent - 1)
-	index = index * #Looks.Finishes + (look.finish - 1)
-	index = index * #Looks.Crests + (look.crest - 1)
+	local values = look :: any
+	local index = 0
+	for _, dimension in dimensions() do
+		index = index * dimension.count + (values[dimension.key] - 1)
+	end
 	return 1 + index
 end
 
@@ -169,16 +273,16 @@ function Looks.decode(code: unknown): Look
 		return Looks.default()
 	end
 	local rest = (code :: number) - 1
-	local crests, finishes, accents, armors = #Looks.Crests, #Looks.Finishes, #Looks.Accents, #Looks.Armor
-	local crest = rest % crests
-	rest = (rest - crest) / crests
-	local finish = rest % finishes
-	rest = (rest - finish) / finishes
-	local accent = rest % accents
-	rest = (rest - accent) / accents
-	local armor = rest % armors
-	local body = (rest - armor) / armors
-	return { armor = armor + 1, accent = accent + 1, finish = finish + 1, crest = crest + 1, body = body + 1 }
+	local look = Looks.default()
+	local values = look :: any
+	local order = dimensions()
+	for position = #order, 1, -1 do
+		local dimension = order[position]
+		local value = rest % dimension.count
+		rest = (rest - value) / dimension.count
+		values[dimension.key] = value + 1
+	end
+	return look
 end
 
 -- The look a bot wears: its team colors, with one of everyone's crests picked from the seed so the bots are not all the
@@ -206,17 +310,107 @@ function Looks.bodyItem(body: number): string?
 	return if entry ~= nil then entry.item else nil
 end
 
--- The look with any crest or body its wearer does not own taken off.
-function Looks.strip(look: Look, owns: (item: string) -> boolean): Look
-	local crestItem = Looks.crestItem(look.crest)
-	local bodyItem = Looks.bodyItem(look.body)
+-- The lists of the choices case items unlock, by the look's field (which is also the prefix of their items' ids).
+local function itemLists(): { [string]: { { name: string, item: string? } } }
 	return {
-		armor = look.armor,
-		accent = look.accent,
-		finish = look.finish,
-		crest = if crestItem ~= nil and not owns(crestItem) then 1 else look.crest,
-		body = if bodyItem ~= nil and not owns(bodyItem) then 1 else look.body,
+		armor = Looks.Armor :: any,
+		accent = Looks.Accents :: any,
+		glow = Looks.Glows :: any,
+		trail = Looks.Trails :: any,
+		impact = Looks.Impacts :: any,
+		title = Looks.Titles :: any,
 	}
+end
+
+-- The item a choice needs (`key` is a look's field, `index` a position in its list), or nil for one everyone has.
+function Looks.itemAt(key: string, index: number): string?
+	if key == "crest" then
+		return Looks.crestItem(index)
+	elseif key == "body" then
+		return Looks.bodyItem(index)
+	end
+	local list = itemLists()[key]
+	local entry = if list ~= nil then list[index] else nil
+	return if entry ~= nil then entry.item else nil
+end
+
+-- The look's field and position an item unlocks, or nil for an id that is not a cosmetic.
+function Looks.slotOf(item: string): (string?, number?)
+	for key, list in itemLists() do
+		for index, entry in list do
+			if entry.item == item then
+				return key, index
+			end
+		end
+	end
+	local body = Looks.bodyFor(item)
+	if body ~= nil then
+		return "body", body
+	end
+	local crest = Looks.crestFor(item)
+	if crest ~= nil then
+		return "crest", crest
+	end
+	return nil, nil
+end
+
+-- What an item is called and what kind of thing it is ("CORE GLOW"), for the case screen; nil for an unknown id.
+function Looks.describe(item: string): { name: string, kind: string }?
+	local key, index = Looks.slotOf(item)
+	if key == nil or index == nil then
+		return nil
+	end
+	if key == "crest" then
+		return { name = Looks.Crests[index], kind = "CREST" }
+	elseif key == "body" then
+		return { name = Looks.Bodies[index].name, kind = "BODY" }
+	end
+	local entry = itemLists()[key][index]
+	return { name = entry.name, kind = (Looks.KindNames :: any)[key] or string.upper(key) }
+end
+
+-- The title under a look's name, or "" for none.
+function Looks.titleOf(look: Look): string
+	return if look.title > 1 and Looks.Titles[look.title] ~= nil then Looks.Titles[look.title].name else ""
+end
+
+-- Every item a player can own, each once, in a fixed order: the premium bodies, the shop's crests, then the case items by
+-- the look's fields. (Only a server and its clients, which run the same code, need to agree on the order: saves keep ids.)
+function Looks.items(): { string }
+	local items: { string } = {}
+	local seen: { [string]: boolean } = {}
+	local function add(item: string?)
+		if item ~= nil and item ~= "" and not seen[item] then
+			seen[item] = true
+			table.insert(items, item)
+		end
+	end
+	for _, body in Looks.Bodies do
+		add(body.item)
+	end
+	for _, crest in Looks.CrestItems do
+		add(crest)
+	end
+	local lists = itemLists()
+	for _, key in { "armor", "accent", "glow", "trail", "impact", "title" } do
+		for _, entry in lists[key] do
+			add(entry.item)
+		end
+	end
+	return items
+end
+
+-- The look with anything its wearer does not own taken off: shop crests and bodies, and every case item.
+function Looks.strip(look: Look, owns: (item: string) -> boolean): Look
+	local stripped = table.clone(look)
+	local values = stripped :: any
+	for _, key in { "armor", "accent", "crest", "body", "glow", "trail", "impact", "title" } do
+		local item = Looks.itemAt(key, values[key])
+		if item ~= nil and not owns(item) then
+			values[key] = 1
+		end
+	end
+	return stripped
 end
 
 -- The body a shop item unlocks, and the crest; nil when it is not one.
@@ -307,11 +501,17 @@ function Looks.resolve(mine: Look, theirs: Look): (Resolved, Resolved)
 		accent = myAccent,
 		finish = Looks.Finishes[mine.finish],
 		crest = mine.crest,
+		glow = Looks.Glows[mine.glow] or Looks.Glows[1],
+		trail = Looks.Trails[mine.trail] or Looks.Trails[1],
+		impact = Looks.Impacts[mine.impact] or Looks.Impacts[1],
 	}, {
 		armor = foeArmor,
 		accent = foeAccent,
 		finish = Looks.Finishes[theirs.finish],
 		crest = theirs.crest,
+		glow = Looks.Glows[theirs.glow] or Looks.Glows[1],
+		trail = Looks.Trails[theirs.trail] or Looks.Trails[1],
+		impact = Looks.Impacts[theirs.impact] or Looks.Impacts[1],
 	}
 end
 

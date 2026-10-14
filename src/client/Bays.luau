@@ -93,6 +93,12 @@ function Bays.new(robot: FighterView.Robot, onGarage: () -> ()): Bays
 			colors.finish.reflectance,
 			colors.finish.name
 		)
+		local glow = colors.glow
+		RobotRig.setGlow(
+			entry.robot,
+			if glow.color ~= nil or glow.animation ~= nil then rgb(glow.color or colors.accent) else nil,
+			glow.animation
+		)
 		return true
 	end
 

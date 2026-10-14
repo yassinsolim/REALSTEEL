@@ -153,6 +153,15 @@ return function(): (number, { string })
 	local Shop: any = load((temp :: any).Shared.Shop)
 	local GaragePanel: any = load((temp :: any).GaragePanel)
 
+	-- The Owned attribute for a list of items, packed as the server publishes it (see Shop.formatOwned).
+	local function ownedText(ids: { string }): string
+		local set: { [string]: boolean } = {}
+		for _, id in ids do
+			set[id] = true
+		end
+		return Shop.formatOwned(set)
+	end
+
 	local function newScene(width: number, height: number, compact: boolean): Scene
 		local container = Instance.new("Frame")
 		container.BackgroundTransparency = 1
@@ -310,7 +319,9 @@ return function(): (number, { string })
 			-- A saved garage that arrives late is followed, and nonsense is not.
 			local saved = Loadout.encode({ chassis = 5, arms = 3, core = 3, legs = 1 })
 			owner:SetAttribute("GarageLoadout", saved)
-			owner:SetAttribute("GarageLook", Looks.encode({ armor = 9, accent = 4, finish = 2, crest = 2, body = 1 }))
+			local savedLook = Looks.default()
+			savedLook.armor, savedLook.accent, savedLook.finish, savedLook.crest = 9, 4, 2, 2
+			owner:SetAttribute("GarageLook", Looks.encode(savedLook))
 			clock += FRAME
 			panel.step(clock)
 			local followed, followedLook = panel.current()
@@ -429,7 +440,7 @@ return function(): (number, { string })
 			end
 			check("a paid item is shown as on its way and not sold again", pendingShown and #bought == 2, #bought)
 			-- The purchase lands: it goes on at once, with its chassis.
-			owner:SetAttribute("Owned", "body.monarch")
+			owner:SetAttribute("Owned", ownedText({ "body.monarch" }))
 			clock += FRAME
 			panel.step(clock)
 			local afterLoadout, afterLook = panel.current()
@@ -464,25 +475,41 @@ return function(): (number, { string })
 			panel.step(clock)
 			panel.actions.itemAction(crown)
 			check("enough coins buy a crest", bought[#bought] == "crest.crown", bought[#bought])
-			owner:SetAttribute("Owned", "body.monarch,crest.crown")
+			owner:SetAttribute("Owned", ownedText({ "body.monarch", "crest.crown" }))
 			owner:SetAttribute("Coins", 650)
 			clock += FRAME
 			panel.step(clock)
 			check("a bought crest is put on", Looks.decode(select(2, panel.current())).crest == crownCrest)
 
-			-- A crest that is not owned yet, picked on the PAINT page, is tried on in the shop instead.
+			-- A crest that is not owned yet, picked on the PAINT page, is tried on in the shop instead. Case items not owned yet
+			-- carry a mark too.
 			panel.actions.tab(3)
 			task.wait(0.05)
 			local paintPage = if frame ~= nil then frame:FindFirstChild("PAINT") else nil
-			local marks = 0
-			if paintPage ~= nil then
-				for _, item in paintPage:GetDescendants() do
-					if item.Name == "Locked" and item:IsA("GuiObject") and item.Visible then
-						marks += 1
+			local function countMarks(): number
+				local marks = 0
+				if paintPage ~= nil then
+					for _, item in paintPage:GetDescendants() do
+						if item.Name == "Locked" and item:IsA("GuiObject") and item.Visible then
+							marks += 1
+						end
+					end
+				end
+				return marks
+			end
+			local caseItems = 0
+			for _, list in { Looks.Armor, Looks.Accents, Looks.Glows, Looks.Trails, Looks.Impacts, Looks.Titles } do
+				for _, entry in list do
+					if entry.item ~= nil then
+						caseItems += 1
 					end
 				end
 			end
-			check("only the crests not owned yet are marked", marks == 1, marks)
+			check(
+				"only the crests and case items not owned yet are marked",
+				countMarks() == 1 + caseItems,
+				`{countMarks()} of {1 + caseItems}`
+			)
 			panel.actions.crest(mohawkCrest)
 			local _, mohawkLook = panel.preview()
 			check(
@@ -493,6 +520,49 @@ return function(): (number, { string })
 					and Looks.decode(mohawkLook).crest == mohawkCrest
 					and Looks.decode(select(2, panel.current())).crest == crownCrest
 			)
+
+			-- A case item that is not owned is tried on where it is; one that is owned goes on.
+			panel.actions.tab(3)
+			local toxic, plasma = 0, 0
+			for index, glow in Looks.Glows do
+				if glow.item == "glow.toxic" then
+					toxic = index
+				elseif glow.item == "glow.plasma" then
+					plasma = index
+				end
+			end
+			local glowBefore = Looks.decode(select(2, panel.current())).glow
+			panel.actions.look("glow", toxic)
+			local _, toxicLook = panel.preview()
+			check(
+				"a case item not owned yet is tried on, not put on",
+				toxicLook ~= nil
+					and Looks.decode(toxicLook).glow == toxic
+					and Looks.decode(select(2, panel.current())).glow == glowBefore
+			)
+			panel.actions.look("glow", toxic)
+			local _, offLook = panel.preview()
+			check(
+				"and a second tap takes it off again",
+				offLook == nil or Looks.decode(offLook).glow == glowBefore,
+				if offLook ~= nil then Looks.decode(offLook).glow else nil
+			)
+			owner:SetAttribute("Owned", ownedText({ "body.monarch", "crest.crown", "glow.plasma" }))
+			clock += FRAME
+			panel.step(clock)
+			check("a case item the player gets loses its mark", countMarks() == caseItems, countMarks())
+			local sentBefore = #sent
+			panel.actions.look("glow", plasma)
+			check("an owned case item is put on", Looks.decode(select(2, panel.current())).glow == plasma)
+			clock += 1
+			panel.step(clock)
+			local wantedGlow = sent[#sent]
+			check(
+				"and the server is asked for it",
+				#sent > sentBefore and wantedGlow ~= nil and wantedGlow.glow == plasma,
+				if wantedGlow ~= nil then wantedGlow.glow else "nothing sent"
+			)
+			panel.actions.look("glow", toxic)
 			panel.actions.tab(1)
 			owner:SetAttribute("GarageLoadout", (panel.current()))
 			owner:SetAttribute("GarageLook", select(2, panel.current()))
@@ -500,7 +570,7 @@ return function(): (number, { string })
 			panel.step(clock)
 			clock += 1
 			panel.step(clock)
-			check("leaving the shop stops trying things on", panel.preview() == nil)
+			check("leaving the shop and the paint stops trying things on", panel.preview() == nil)
 		end
 
 		-- The layout, on a desktop view, a phone and a tall narrow window.
@@ -623,9 +693,20 @@ return function(): (number, { string })
 					local rows, cells = gridShape(grid)
 					table.insert(shapes, `{cells}x{rows}`)
 				end
+				-- Swatches wrap in rows of eight, the finishes take a row and the crests two, and the case items' chips
+				-- run three to a row.
+				local expected = {
+					`{#Looks.Armor}x{math.ceil(#Looks.Armor / 8)}`,
+					`{#Looks.Accents}x{math.ceil(#Looks.Accents / 8)}`,
+					`{#Looks.Finishes}x1`,
+					`{#Looks.Crests}x2`,
+				}
+				for _, list in { Looks.Glows, Looks.Trails, Looks.Impacts, Looks.Titles } do
+					table.insert(expected, `{#list}x{math.ceil(#list / 3)}`)
+				end
 				check(
-					`{view.name}: swatches make two rows of eight; finishes fit a row and crests two`,
-					table.concat(shapes, ",") == "16x2,16x2,4x1,7x2",
+					`{view.name}: swatches wrap in rows of eight, finishes fit a row, crests two, case items three a row`,
+					table.concat(shapes, ",") == table.concat(expected, ","),
 					table.concat(shapes, ",")
 				)
 			end

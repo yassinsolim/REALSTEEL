@@ -8,6 +8,12 @@
 -- Robux items are sold as developer products: `product` is the product's ID (scripts/products.ps1 creates the product and
 -- writes it here; 0 means not created yet, and the item is not for sale), and `robux` is the price the shop shows, the
 -- same as the product's. Coin items cost `coins`, the free currency every match pays out.
+--
+-- What a player owns reaches the clients as the Owned attribute (see Wallet): one bit for each item in Looks.items(), six
+-- to a character (`formatOwned`, `parseOwned`). A replicated attribute may hold at most 50 characters in a place with
+-- server authority, which a list of ids would pass with a handful of items; this fits 300.
+
+local Looks = require(script.Parent.Looks)
 
 export type Item = {
 	id: string,
@@ -142,12 +148,62 @@ function Shop.formatCoins(coins: number): string
 	return (grouped:gsub("^,", ""))
 end
 
--- The ids in a published Owned attribute ("body.monarch,crest.crown").
+-- The longest string a replicated attribute may hold in a place with server authority.
+Shop.AttributeLimit = 50
+
+local OWNED_DIGITS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
+-- Every item a player can own, in the Owned attribute's order (the lists in Looks do not change while a server runs).
+local catalog: { string }? = nil
+local function ownable(): { string }
+	local items = catalog
+	if items ~= nil then
+		return items
+	end
+	local fresh = Looks.items()
+	catalog = fresh
+	return fresh
+end
+
+-- The Owned attribute for a set of item ids. Ids no catalog item has (an item taken out of the game) are left out.
+function Shop.formatOwned(owned: { [string]: boolean }): string
+	local items = ownable()
+	local digits: { string } = {}
+	local last = 0
+	for start = 1, #items, 6 do
+		local value = 0
+		for bit = 0, 5 do
+			local item = items[start + bit]
+			if item ~= nil and owned[item] then
+				value += 2 ^ bit
+			end
+		end
+		table.insert(digits, string.sub(OWNED_DIGITS, value + 1, value + 1))
+		if value > 0 then
+			last = #digits
+		end
+	end
+	return table.concat(digits, "", 1, last)
+end
+
+-- The ids in a published Owned attribute.
 function Shop.parseOwned(text: unknown): { [string]: boolean }
 	local owned: { [string]: boolean } = {}
-	if type(text) == "string" then
-		for id in text:gmatch("[^,]+") do
-			owned[id] = true
+	if type(text) ~= "string" then
+		return owned
+	end
+	local items = ownable()
+	for position = 1, #text do
+		local digit = string.find(OWNED_DIGITS, string.sub(text, position, position), 1, true)
+		local value = if digit ~= nil then digit - 1 else 0
+		for bit = 0, 5 do
+			if value % 2 == 1 then
+				local item = items[(position - 1) * 6 + bit + 1]
+				if item ~= nil then
+					owned[item] = true
+				end
+			end
+			value = math.floor(value / 2)
 		end
 	end
 	return owned

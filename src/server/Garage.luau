@@ -76,6 +76,10 @@ local function toSaved(profile: Profile): { [string]: number }
 		finish = profile.look.finish,
 		crest = profile.look.crest,
 		body = profile.look.body,
+		glow = profile.look.glow,
+		trail = profile.look.trail,
+		impact = profile.look.impact,
+		title = profile.look.title,
 	}
 end
 
@@ -190,7 +194,23 @@ function Garage.new(onChange: (player: Player) -> (), options: Options?): Garage
 		-- Fields the client leaves out keep what the profile has.
 		local source = payload :: { [string]: unknown }
 		local merged: { [string]: unknown } = table.clone(toSaved(profile) :: any)
-		for _, key in { "chassis", "arms", "core", "legs", "armor", "accent", "finish", "crest", "body" } do
+		for _, key in
+			{
+				"chassis",
+				"arms",
+				"core",
+				"legs",
+				"armor",
+				"accent",
+				"finish",
+				"crest",
+				"body",
+				"glow",
+				"trail",
+				"impact",
+				"title",
+			}
+		do
 			local value = numberField(source, key)
 			if value ~= nil then
 				merged[key] = value

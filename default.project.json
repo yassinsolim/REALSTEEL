@@ -50,6 +50,12 @@
         },
         "WalletSpec": {
           "$path": "tests/WalletSpec.luau"
+        },
+        "CasesSpec": {
+          "$path": "tests/CasesSpec.luau"
+        },
+        "RewardsSpec": {
+          "$path": "tests/RewardsSpec.luau"
         }
       }
     },

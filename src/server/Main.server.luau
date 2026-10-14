@@ -10,11 +10,13 @@ local RunService = game:GetService("RunService")
 
 local HallWalk = require(ReplicatedStorage.Shared.HallWalk)
 local InputSetup = require(ReplicatedStorage.Shared.InputSetup)
+local Looks = require(ReplicatedStorage.Shared.Looks)
 local Simulation = require(ReplicatedStorage.Shared.Simulation)
 local Garage = require(script.Parent.Garage)
 local Pads = require(script.Parent.Pads)
 local Records = require(script.Parent.Records)
 local RobotLibrary = require(script.Parent.RobotLibrary)
+local Rewards = require(script.Parent.Rewards)
 local Rings = require(script.Parent.Rings)
 local Wallet = require(script.Parent.Wallet)
 local WorldBuilder = require(script.Parent.WorldBuilder)
@@ -58,12 +60,15 @@ local wallet = Wallet.new(function(player: Player)
 end)
 garage.setOwnership(wallet.owns)
 MarketplaceService.ProcessReceipt = wallet.processReceipt
+-- The daily reward, the day's contracts and the cases, kept in the wallet (see Rewards).
+local rewards = Rewards.new(wallet)
 -- Every finished bot match and 1v1 goes on its players' records, and 1v1s decide the champion (see Records); it pays
--- them coins too.
+-- them coins and counts toward their contracts too.
 local records = Records.new(state)
 local rings = Rings.new(world, garage, state, function(mode: string, level: number, owners, winner: number)
 	records.matchEnded({ mode = mode, level = level, owners = owners, winner = winner })
 	wallet.matchEnded(mode, level, owners, winner)
+	rewards.matchEnded(mode, level, owners, winner)
 end)
 -- The pads in front of the main ring start a fight for whoever stands on them (see Pads).
 Pads.new(state, { seated = rings.seated, request = rings.request, pair = rings.pair })
@@ -85,13 +90,25 @@ end)
 -- Every player gets a bay for their robot. With more players than bays, the latecomers simply have none.
 local bayOwners: { [number]: Player? } = {}
 
+-- A bay's nameplate: the owner's name, and the title they wear (see Looks.Titles).
+local function nameplateText(player: Player): string
+	local name = string.upper(string.sub(player.DisplayName, 1, NAME_LENGTH))
+	local title = Looks.titleOf(Looks.decode(player:GetAttribute("GarageLook")))
+	return if title ~= "" then `{name}  ·  {title}` else name
+end
+
 local function claimBay(player: Player)
 	for _, bay in world.hall.bays do
 		if bayOwners[bay.index] == nil then
 			bayOwners[bay.index] = player
-			bay.nameplate.Text = string.upper(string.sub(player.DisplayName, 1, NAME_LENGTH))
+			bay.nameplate.Text = nameplateText(player)
 			bay.nameplate.TextColor3 = Color3.new(1, 1, 1)
 			player:SetAttribute("Bay", bay.index)
+			player:GetAttributeChangedSignal("GarageLook"):Connect(function()
+				if bayOwners[bay.index] == player then
+					bay.nameplate.Text = nameplateText(player)
+				end
+			end)
 			return
 		end
 	end
@@ -114,6 +131,7 @@ local function added(player: Player)
 	wallet.add(player)
 	garage.add(player)
 	records.add(player)
+	rewards.add(player)
 	InputSetup.build(player)
 	claimBay(player)
 	player.CharacterAdded:Connect(function()
@@ -129,6 +147,7 @@ Players.PlayerRemoving:Connect(function(player: Player)
 	rings.remove(player)
 	freeBay(player)
 	records.remove(player)
+	rewards.remove(player)
 	wallet.remove(player)
 	garage.remove(player)
 end)

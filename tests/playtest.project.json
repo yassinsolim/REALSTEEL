@@ -20,7 +20,9 @@
         "StandingsSpec": { "$path": "StandingsSpec.luau" },
         "HoistSpec": { "$path": "HoistSpec.luau" },
         "RecordsSpec": { "$path": "RecordsSpec.luau" },
-        "WalletSpec": { "$path": "WalletSpec.luau" }
+        "WalletSpec": { "$path": "WalletSpec.luau" },
+        "CasesSpec": { "$path": "CasesSpec.luau" },
+        "RewardsSpec": { "$path": "RewardsSpec.luau" }
       }
     },
     "ServerScriptService": {

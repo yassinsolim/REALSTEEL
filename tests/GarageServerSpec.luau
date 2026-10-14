@@ -151,7 +151,11 @@ return function(): (number, { string })
 				after.arms == 2 and after.core == 3 and Looks.decode(select(2, garage.codes(player))).armor == 7
 			)
 
-			-- Whatever a client sends is cleaned before it is kept.
+			-- Whatever a client sends is cleaned before it is kept. (The player owns everything here, so the clamped picks are
+			-- worn as they are: the last armor is a case item.)
+			garage.setOwnership(function(): boolean
+				return true
+			end)
 			task.wait(COOLDOWN)
 			garage.handle(player, "set", {
 				chassis = 99,

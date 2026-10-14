@@ -12,6 +12,7 @@ local Workspace = game:GetService("Workspace")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local FightConfig = require(Shared:WaitForChild("FightConfig"))
 local FightSim = require(Shared:WaitForChild("FightSim"))
+local Looks = require(Shared:WaitForChild("Looks"))
 local FighterView = require(script.Parent:WaitForChild("FighterView"))
 local Sfx = require(script.Parent:WaitForChild("Sfx"))
 
@@ -43,6 +44,14 @@ export type Effects = {
 	-- Whether big hits here set the crowd roaring. The roar has one cooldown for the whole hall, so only the fight the
 	-- player follows may spend it.
 	cheers: boolean,
+	-- Each fighter's strike trail and impact effect (see Looks.Trails and Looks.Impacts), and its accent color.
+	styles: { [number]: Style },
+}
+
+type Style = {
+	trail: Looks.Trail,
+	impact: Looks.Impact,
+	accent: Color3,
 }
 
 local Effects = {}
@@ -83,10 +92,28 @@ function Effects.new(sfx: Sfx.Sfx): Effects
 		punch = 0,
 		excitement = 0,
 		cheers = true,
+		styles = {},
 	}
 end
 
-local function buildTrail(part: BasePart, accent: Color3): Trail
+local function rgb(color: Looks.Rgb): Color3
+	return Color3.fromRGB(color[1], color[2], color[3])
+end
+
+-- A trail's colors from its hot core to its tail: the accent's, a trail item's, or this moment's hue for "spectrum".
+local function trailColors(style: Style?, accent: Color3, now: number): ColorSequence
+	local trail = if style ~= nil then style.trail else nil
+	if trail ~= nil and trail.animation == "spectrum" then
+		local hue = (now * 0.35) % 1
+		return ColorSequence.new(Color3.fromHSV(hue, 0.35, 1), Color3.fromHSV((hue + 0.18) % 1, 0.9, 1))
+	end
+	if trail ~= nil and trail.from ~= nil and trail.to ~= nil then
+		return ColorSequence.new(rgb(trail.from), rgb(trail.to))
+	end
+	return ColorSequence.new(Color3.new(1, 1, 1), accent)
+end
+
+local function buildTrail(part: BasePart, colors: ColorSequence): Trail
 	local half = part.Size.Y * 0.45
 	local top = Instance.new("Attachment")
 	top.Name = "TrailTop"
@@ -105,7 +132,7 @@ local function buildTrail(part: BasePart, accent: Color3): Trail
 	trail.FaceCamera = true
 	trail.LightEmission = 1
 	trail.LightInfluence = 0
-	trail.Color = ColorSequence.new(Color3.new(1, 1, 1), accent)
+	trail.Color = colors
 	trail.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 1) })
 	trail.WidthScale = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 0.15) })
 	trail.Enabled = false
@@ -117,10 +144,11 @@ end
 -- swap), since the trails are fastened to them.
 function Effects.attachSlot(self: Effects, slot: number, view: FighterView.View, accent: Color3)
 	local set: { [string]: Trail } = {}
+	local colors = trailColors(self.styles[slot], accent, os.clock())
 	for _, striker in STRIKERS do
 		local part = view.robot.folder:FindFirstChild(striker .. "_Armor")
 		if part ~= nil and part:IsA("BasePart") then
-			set[striker] = buildTrail(part, accent)
+			set[striker] = buildTrail(part, colors)
 		end
 	end
 	local old = self.trails[slot]
@@ -147,13 +175,24 @@ function Effects.attach(self: Effects, views: { FighterView.View }, accents: { C
 end
 
 function Effects.setAccent(self: Effects, slot: number, accent: Color3)
+	local style = self.styles[slot]
+	if style ~= nil then
+		style.accent = accent
+	end
 	local set = self.trails[slot]
 	if set == nil then
 		return
 	end
+	local colors = trailColors(style, accent, os.clock())
 	for _, trail in set do
-		trail.Color = ColorSequence.new(Color3.new(1, 1, 1), accent)
+		trail.Color = colors
 	end
+end
+
+-- Puts a fighter's strike trail and impact effect on (see Looks.Trails and Looks.Impacts).
+function Effects.setStyle(self: Effects, slot: number, trail: Looks.Trail, impact: Looks.Impact, accent: Color3)
+	self.styles[slot] = { trail = trail, impact = impact, accent = accent }
+	Effects.setAccent(self, slot, accent)
 end
 
 local function anchorPart(self: Effects, cframe: CFrame): Part
@@ -264,6 +303,64 @@ local function impact(self: Effects, position: Vector3, toward: Vector3, color: 
 	Debris:AddItem(emitterPart, 1)
 end
 
+-- What a case item's impact adds on top of the sparks (see Looks.Impacts): a burst of smoke, a second slower ring, or a
+-- shower of gold that falls away.
+local function flair(self: Effects, kind: string?, position: Vector3, color: Color3, scale: number)
+	if kind == nil then
+		return
+	end
+	local part = anchorPart(self, facing(position, Vector3.yAxis))
+	if kind == "smoke" then
+		local smoke = Instance.new("ParticleEmitter")
+		smoke.Texture = SMOKE_TEXTURE
+		smoke.Color = ColorSequence.new(color, Color3.fromRGB(60, 44, 40))
+		smoke.LightEmission = 0.4
+		smoke.LightInfluence = 0.3
+		smoke.Size = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.8 * scale),
+			NumberSequenceKeypoint.new(1, 3.4 * scale),
+		})
+		smoke.Transparency =
+			NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 1) })
+		smoke.Lifetime = NumberRange.new(0.5, 0.8)
+		smoke.Speed = NumberRange.new(3, 8)
+		smoke.SpreadAngle = Vector2.new(180, 180)
+		smoke.Drag = 4
+		smoke.Rate = 0
+		smoke.Parent = part
+		smoke:Emit(math.floor(8 * scale) + 4)
+	elseif kind == "ring" then
+		local ring = Instance.new("BillboardGui")
+		ring.Adornee = part
+		ring.AlwaysOnTop = true
+		ring.LightInfluence = 0
+		ring.Size = UDim2.fromScale(scale * 2, scale * 2)
+		ring.Parent = part
+		local circle = Instance.new("Frame")
+		circle.AnchorPoint = Vector2.new(0.5, 0.5)
+		circle.Position = UDim2.fromScale(0.5, 0.5)
+		circle.Size = UDim2.fromScale(1, 1)
+		circle.BackgroundTransparency = 1
+		circle.Parent = ring
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0.5, 0)
+		corner.Parent = circle
+		local stroke = Instance.new("UIStroke")
+		stroke.Color = color
+		stroke.Thickness = 10
+		stroke.Parent = circle
+		local grow = TweenInfo.new(0.45, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+		tweenAndClean(ring, grow, { Size = UDim2.fromScale(9 * scale, 9 * scale) })
+		tweenAndClean(stroke, grow, { Thickness = 1, Transparency = 1 })
+	elseif kind == "coins" then
+		local shower = sparkEmitter(part, color, NumberRange.new(8, 18), 80, 0.9 * scale)
+		shower.Acceleration = Vector3.new(0, -60, 0)
+		shower.Lifetime = NumberRange.new(0.5, 0.9)
+		shower:Emit(math.floor(16 * scale) + 6)
+	end
+	Debris:AddItem(part, 1.2)
+end
+
 local function dust(self: Effects, position: Vector3)
 	local part = anchorPart(self, facing(position + Vector3.new(0, 0.2, 0), Vector3.yAxis))
 	local emitter = Instance.new("ParticleEmitter")
@@ -295,13 +392,15 @@ function Effects.land(self: Effects, views: { FighterView.View })
 	Sfx.play(self.sfx, "heavy", 0.7, 0.7)
 end
 
--- Reads one fighter's view of a frame. `defender` is the fighter whose hitstop just rose, `attacker` the other.
+-- Reads one fighter's view of a frame. `defender` is the fighter whose hitstop just rose, `attacker` the other, and
+-- `style` the attacker's look, whose impact effect colors the hits it lands.
 local function onImpact(
 	self: Effects,
 	defender: FightSim.Fighter,
 	attacker: FightSim.Fighter,
 	defenderView: FighterView.View,
-	attackerView: FighterView.View
+	attackerView: FighterView.View,
+	style: Style?
 )
 	local chest = FighterView.chestPoint(defenderView)
 	local move = attacker.stats.moves[attacker.moveId]
@@ -319,8 +418,12 @@ local function onImpact(
 	toward = toward.Unit
 
 	local now = os.clock()
+	local itemImpact = if style ~= nil then style.impact else nil
+	local itemColor = if itemImpact ~= nil and itemImpact.color ~= nil then rgb(itemImpact.color) else nil
+	local itemFlair = if itemImpact ~= nil then itemImpact.flair else nil
 	if defender.state == FightSim.State.KO then
-		impact(self, point, toward, KO_COLOR, 2.2, 48)
+		impact(self, point, toward, itemColor or KO_COLOR, 2.2, 48)
+		flair(self, itemFlair, point, itemColor or KO_COLOR, 2.2)
 		self.shake = math.max(self.shake, 0.6)
 		self.flash = 1
 		self.punch = 1
@@ -338,7 +441,9 @@ local function onImpact(
 		Sfx.play(self.sfx, "clank", 1, if move ~= nil and move.damage > 15 then 0.95 else 1.2)
 	else
 		local heavy = defender.hitstop >= HEAVY_HITSTOP
-		impact(self, point, toward, HIT_COLOR, if heavy then 1.5 else 1, if heavy then 30 else 18)
+		local scale = if heavy then 1.5 else 1
+		impact(self, point, toward, itemColor or HIT_COLOR, scale, if heavy then 30 else 18)
+		flair(self, itemFlair, point, itemColor or HIT_COLOR, scale)
 		self.shake = math.max(self.shake, if heavy then 0.3 else 0.12)
 		self.punch = math.max(self.punch, if heavy then 0.7 else 0.35)
 		self.flash = math.max(self.flash, if heavy then 0.22 else 0.06)
@@ -427,7 +532,7 @@ function Effects.update(
 				and now - (self.lastImpact[slot] or -1) > IMPACT_COOLDOWN
 			then
 				self.lastImpact[slot] = now
-				onImpact(self, fighter, fighters[other], views[slot], views[other])
+				onImpact(self, fighter, fighters[other], views[slot], views[other], self.styles[other])
 			end
 			if fighter.state == FightSim.State.Dash and previous.state ~= FightSim.State.Dash then
 				dust(self, FighterView.groundPoint(views[slot]))
@@ -486,8 +591,14 @@ function Effects.update(
 		end
 		local set = self.trails[slot]
 		if set ~= nil then
+			local style = self.styles[slot]
+			local spectrum = style ~= nil and style.trail.animation == "spectrum"
+			local colors = if spectrum and style ~= nil then trailColors(style, style.accent, now) else nil
 			for striker, trail in set do
 				trail.Enabled = striker == wanted
+				if colors ~= nil then
+					trail.Color = colors
+				end
 			end
 		end
 	end

@@ -2,8 +2,10 @@
 
 -- The garage screen. A panel beside the robot (along the bottom of a tall, narrow view) with four pages: BUILD (a chassis
 -- and a module each for arms, core and legs, every part saying what it gives and what it costs, over bars that rate the
--- whole build), PRESETS (ready-made builds, one tap each), PAINT (armor, accent, finish and crest) and SHOP (premium
--- bodies for Robux and crests for coins: tap a card to try it on, then buy or equip it).
+-- whole build), PRESETS (ready-made builds, one tap each), PAINT (armor, accent, finish and crest, then the case items:
+-- core glow, strike trail, impact effect and title) and SHOP (premium bodies for Robux and crests for coins: tap a card to
+-- try it on, then buy or equip it). A case item the player does not own yet carries a dot in its rarity's color; tapping
+-- it tries it on.
 --
 -- The robot in the arena wears every change at once (see `preview`); the choices go to the server (Garage on the server),
 -- which checks them and keeps them. The panel keeps asking until the server's own copy, which it publishes on the player
@@ -19,6 +21,7 @@ local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Cases = require(Shared:WaitForChild("Cases"))
 local Loadout = require(Shared:WaitForChild("Loadout"))
 local Looks = require(Shared:WaitForChild("Looks"))
 local Shop = require(Shared:WaitForChild("Shop"))
@@ -35,6 +38,8 @@ export type Options = {
 	play: (name: string, gain: number?, pitch: number?) -> (),
 	-- Buys a shop item: prompts the Robux purchase, or asks the server to spend coins. Without it nothing can be bought.
 	buy: ((item: Shop.Item) -> ())?,
+	-- Opens the cases (where case items come from). Without it the PAINT page has no button for them.
+	openCases: (() -> ())?,
 }
 
 export type Panel = {
@@ -83,6 +88,14 @@ type ShopCard = {
 	action: TextButton,
 }
 
+-- A choice that has case items among its options: the heading, the chips (or swatches), and the dot on each case item's
+-- chip, shown while the player does not own it.
+type CaseSection = {
+	head: TextLabel,
+	chips: { Widgets.Option },
+	locks: { [number]: Frame },
+}
+
 type Ui = {
 	mode: string,
 	metrics: Widgets.Metrics,
@@ -99,14 +112,18 @@ type Ui = {
 	presets: { PresetUi },
 	armorHead: TextLabel,
 	armor: { Widgets.Option },
+	armorLocks: { [number]: Frame },
 	accentHead: TextLabel,
 	accent: { Widgets.Option },
+	accentLocks: { [number]: Frame },
 	finishHead: TextLabel,
 	finish: { Widgets.Option },
 	crestHead: TextLabel,
 	crest: { Widgets.Option },
 	-- A mark on each crest chip that is a shop item, shown while the player does not own it.
 	crestLocks: { [number]: Frame },
+	-- The case items' choices, by the look's field: glow, trail, impact and title.
+	caseSections: { [string]: CaseSection },
 	coins: TextLabel,
 	cards: { ShopCard },
 }
@@ -119,6 +136,11 @@ export type Actions = {
 	accent: (index: number) -> (),
 	finish: (index: number) -> (),
 	crest: (index: number) -> (),
+	-- A case item's choice, by the look's field ("glow", "trail", "impact" or "title"); one the player does not own is
+	-- tried on.
+	look: (key: string, index: number) -> (),
+	-- Opens the cases.
+	cases: () -> (),
 	-- A shop card, by its place in Shop.Items: tapping it tries the item on; its button buys or equips it.
 	item: (index: number) -> (),
 	itemAction: (index: number) -> (),
@@ -130,6 +152,7 @@ local GaragePanel = {}
 
 local Color = Widgets.Color
 local TAB_NAMES = { "BUILD", "PRESETS", "PAINT", "SHOP" }
+local PAINT_TAB = 3
 local SHOP_TAB = 4
 -- A view narrower than this (width over height) puts the panel along the bottom instead of the side.
 local SHEET_ASPECT = 1.2
@@ -362,7 +385,123 @@ local function namesOf<T>(list: { T }, read: (item: T) -> string): { string }
 	return names
 end
 
-local function buildUi(gui: GuiBase2d, mode: string, actions: Actions): Ui
+-- Every hue, for a spectrum glow or trail.
+local SPECTRUM = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 72, 72)),
+	ColorSequenceKeypoint.new(0.2, Color3.fromRGB(255, 200, 60)),
+	ColorSequenceKeypoint.new(0.4, Color3.fromRGB(96, 255, 120)),
+	ColorSequenceKeypoint.new(0.6, Color3.fromRGB(64, 200, 255)),
+	ColorSequenceKeypoint.new(0.8, Color3.fromRGB(150, 100, 255)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 80, 200)),
+})
+
+-- The small dot in a chip's corner that says the player does not own it yet: amber for a shop item, the rarity's color for
+-- a case item.
+local function lockMark(button: GuiObject, color: Color3): Frame
+	local mark = Instance.new("Frame")
+	mark.Name = "Locked"
+	mark.AnchorPoint = Vector2.new(1, 0)
+	mark.BackgroundColor3 = color
+	mark.BorderSizePixel = 0
+	mark.Position = UDim2.new(1, -5, 0, 5)
+	mark.Size = UDim2.fromOffset(7, 7)
+	mark.Parent = button
+	Widgets.round(mark, 4)
+	return mark
+end
+
+-- The dots for the case items in a list of choices, by their place in it.
+local function caseLocks(chips: { Widgets.Option }, entries: { { name: string, item: string? } }): { [number]: Frame }
+	local locks: { [number]: Frame } = {}
+	for index, chip in chips do
+		local item = entries[index].item
+		local rarity = if item ~= nil then Cases.rarityOf(item) else nil
+		if rarity ~= nil then
+			locks[index] = lockMark(chip.button, toColor(Cases.Rarities[rarity].color))
+		end
+	end
+	return locks
+end
+
+-- A choice with case items among its options, as a section of chips. `bars` colors the bar under each chip (a sweep of
+-- colors, so a trail can show where it starts and ends); without it the chips have none.
+local function newCaseSection(
+	parent: Instance,
+	order: number,
+	metrics: Widgets.Metrics,
+	entries: { { name: string, item: string? } },
+	bars: { ColorSequence }?,
+	onPick: (index: number) -> ()
+): CaseSection
+	local frame, head = Widgets.section(parent, order, metrics)
+	local white: { Color3 }? = nil
+	if bars ~= nil then
+		white = table.create(#entries, Color3.new(1, 1, 1))
+	end
+	local chips = chipRow(frame, 2, metrics, namesOf(entries, nameOf), white, 3, onPick)
+	if bars ~= nil then
+		for index, chip in chips do
+			-- The bar is the chip's only Frame until the lock dots go on.
+			local bar = chip.button:FindFirstChildOfClass("Frame")
+			if bar ~= nil then
+				local gradient = Instance.new("UIGradient")
+				gradient.Color = bars[index]
+				gradient.Parent = bar
+			end
+		end
+	end
+	return { head = head, chips = chips, locks = caseLocks(chips, entries) }
+end
+
+-- The bars for the case items' choices: a glow's or an impact's color, a trail's sweep, and every hue for a spectrum. The
+-- first glow and trail follow the accent, so their bars are the team's; the standard impact bursts amber (see Effects).
+local function solid(color: Color3): ColorSequence
+	return ColorSequence.new(color)
+end
+
+local function glowBars(): { ColorSequence }
+	local bars: { ColorSequence } = {}
+	for index, glow in Looks.Glows do
+		bars[index] = if glow.animation == "spectrum"
+			then SPECTRUM
+			else solid(toColor(glow.color or Looks.Team.me.accent))
+	end
+	return bars
+end
+
+local function trailBars(): { ColorSequence }
+	local bars: { ColorSequence } = {}
+	for index, trail in Looks.Trails do
+		if trail.animation == "spectrum" then
+			bars[index] = SPECTRUM
+		else
+			local to = toColor(trail.to or Looks.Team.me.accent)
+			bars[index] = ColorSequence.new(if trail.from ~= nil then toColor(trail.from) else Color3.new(1, 1, 1), to)
+		end
+	end
+	return bars
+end
+
+local function impactBars(): { ColorSequence }
+	local bars: { ColorSequence } = {}
+	for index, impact in Looks.Impacts do
+		bars[index] = solid(if impact.color ~= nil then toColor(impact.color) else Color3.fromRGB(255, 190, 80))
+	end
+	return bars
+end
+
+type Entries = { { name: string, item: string? } }
+
+-- The choices on the PAINT page that come from cases besides paint: the look's field, the heading, the list, and the bars
+-- under its chips.
+local CASE_CHOICES: { { key: string, heading: string, entries: Entries, bars: { ColorSequence }? } } = {
+	{ key = "glow", heading = "CORE GLOW", entries = Looks.Glows :: any, bars = glowBars() },
+	{ key = "trail", heading = "STRIKE TRAIL", entries = Looks.Trails :: any, bars = trailBars() },
+	{ key = "impact", heading = "IMPACT FX", entries = Looks.Impacts :: any, bars = impactBars() },
+	{ key = "title", heading = "TITLE", entries = Looks.Titles :: any },
+}
+
+local function buildUi(gui: GuiBase2d, mode: string, actions: Actions, canOpenCases: boolean): Ui
 	local metrics = if mode == "side" then Widgets.Regular else Widgets.Compact
 	local pad = metrics.pad
 
@@ -505,8 +644,10 @@ local function buildUi(gui: GuiBase2d, mode: string, actions: Actions): Ui
 	-- PAINT.
 	local armorBox, armorHead = Widgets.section(pages[3], 1, metrics)
 	local armor = newSwatches(armorBox, 2, metrics, Looks.Armor, Looks.Team.me.armor, actions.armor)
+	local armorLocks = caseLocks(armor, Looks.Armor :: any)
 	local accentBox, accentHead = Widgets.section(pages[3], 2, metrics)
 	local accent = newSwatches(accentBox, 2, metrics, Looks.Accents, Looks.Team.me.accent, actions.accent)
+	local accentLocks = caseLocks(accent, Looks.Accents :: any)
 	local finishBox, finishHead = Widgets.section(pages[3], 3, metrics)
 	local finish = chipRow(finishBox, 2, metrics, namesOf(Looks.Finishes, nameOf), nil, 4, actions.finish)
 	local crestBox, crestHead = Widgets.section(pages[3], 4, metrics)
@@ -515,17 +656,53 @@ local function buildUi(gui: GuiBase2d, mode: string, actions: Actions): Ui
 	for index, chip in crest do
 		if Looks.crestItem(index) ~= nil then
 			-- A shop crest the player does not own: a small amber mark, and picking it opens the shop.
-			local mark = Instance.new("Frame")
-			mark.Name = "Locked"
-			mark.AnchorPoint = Vector2.new(1, 0)
-			mark.BackgroundColor3 = Color.Amber
-			mark.BorderSizePixel = 0
-			mark.Position = UDim2.new(1, -5, 0, 5)
-			mark.Size = UDim2.fromOffset(7, 7)
-			mark.Parent = chip.button
-			Widgets.round(mark, 4)
-			crestLocks[index] = mark
+			crestLocks[index] = lockMark(chip.button, Color.Amber)
 		end
+	end
+
+	-- The case items: what they are, a way to the cases, then one section for each kind.
+	local caseBox, caseHead = Widgets.section(pages[3], 5, metrics)
+	caseHead.Text = "FROM CASES"
+	local caseHint = Widgets.text(
+		caseBox,
+		"Core glows, strike trails, impact effects, titles and a few paints come from cases. A dot in a rarity's color marks one you don't own yet: tap it to try it on.",
+		Enum.Font.GothamMedium,
+		metrics.small,
+		Color.Muted
+	)
+	caseHint.LayoutOrder = 2
+	caseHint.TextWrapped = true
+	caseHint.AutomaticSize = Enum.AutomaticSize.Y
+	caseHint.Size = UDim2.fromScale(1, 0)
+	local openCases = Instance.new("TextButton")
+	openCases.Name = "OpenCases"
+	openCases.LayoutOrder = 3
+	openCases.Size = UDim2.new(1, 0, 0, metrics.chip)
+	openCases.BackgroundColor3 = Color.Hot
+	openCases.BorderSizePixel = 0
+	openCases.AutoButtonColor = true
+	openCases.Text = "OPEN CASES"
+	openCases.Font = Enum.Font.GothamBlack
+	openCases.TextSize = metrics.tabText
+	openCases.TextColor3 = Color.Amber
+	openCases.Parent = caseBox
+	openCases.Visible = canOpenCases
+	Widgets.round(openCases, 8)
+	Widgets.stroke(openCases, Color.Amber, 1.5, 0.4)
+	openCases.Activated:Connect(actions.cases)
+	local caseSections: { [string]: CaseSection } = {}
+	for order, entry in CASE_CHOICES do
+		local key = entry.key
+		caseSections[key] = newCaseSection(
+			pages[3],
+			5 + order,
+			metrics,
+			entry.entries,
+			entry.bars,
+			function(index: number)
+				actions.look(key, index)
+			end
+		)
 	end
 
 	-- SHOP: the coins, then the bodies and the crests for sale.
@@ -577,13 +754,16 @@ local function buildUi(gui: GuiBase2d, mode: string, actions: Actions): Ui
 		presets = presets,
 		armorHead = armorHead,
 		armor = armor,
+		armorLocks = armorLocks,
 		accentHead = accentHead,
 		accent = accent,
+		accentLocks = accentLocks,
 		finishHead = finishHead,
 		finish = finish,
 		crestHead = crestHead,
 		crest = crest,
 		crestLocks = crestLocks,
+		caseSections = caseSections,
 		coins = coins,
 		cards = cards,
 	}
@@ -623,6 +803,8 @@ function GaragePanel.new(options: Options): Panel
 	local equipWhenOwned: string? = nil
 	local awaiting: { [string]: boolean } = {}
 	local promptedAt: { [string]: number } = {}
+	-- A case item the player does not own, being tried on: the look's field and the place in its list.
+	local tryingCase: { key: string, index: number }? = nil
 
 	local function moduleIndex(slot: string): number
 		return if slot == "ARMS" then choice.arms elseif slot == "CORE" then choice.core else choice.legs
@@ -712,16 +894,42 @@ function GaragePanel.new(options: Options): Panel
 			entry.tag.Visible = index == equipped
 		end
 
-		current.armorHead.Text = richName("ARMOR", Looks.Armor[look.armor].name)
-		current.accentHead.Text = richName("ACCENT", Looks.Accents[look.accent].name)
+		-- PAINT: each choice's heading and lit chip follow the look, or the case item being tried on in that choice; a case
+		-- item the player does not own says its rarity.
+		local function shownIndex(key: string): number
+			local case = tryingCase
+			if case ~= nil and case.key == key then
+				return case.index
+			end
+			return (look :: any)[key]
+		end
+		local function heading(title: string, key: string, entries: Entries): string
+			local entry = entries[shownIndex(key)]
+			local item = entry.item
+			local rarity = if item ~= nil and not owned[item] then Cases.rarityOf(item) else nil
+			if rarity ~= nil then
+				local info = Cases.Rarities[rarity]
+				local color = info.color
+				return `{title}  <font color="rgb({color[1]},{color[2]},{color[3]})">{entry.name}  ·  {info.name}, FROM CASES</font>`
+			end
+			return richName(title, entry.name)
+		end
+		local function light(chips: { Widgets.Option }, locks: { [number]: Frame }, key: string, entries: Entries)
+			local shown = shownIndex(key)
+			for index, option in chips do
+				Widgets.setSelected(option, index == shown)
+			end
+			for index, mark in locks do
+				local item = entries[index].item
+				mark.Visible = item ~= nil and not owned[item]
+			end
+		end
+		current.armorHead.Text = heading("ARMOR", "armor", Looks.Armor :: any)
+		current.accentHead.Text = heading("ACCENT", "accent", Looks.Accents :: any)
 		current.finishHead.Text = richName("FINISH", Looks.Finishes[look.finish].name)
 		current.crestHead.Text = richName("CREST", Looks.Crests[look.crest])
-		for index, option in current.armor do
-			Widgets.setSelected(option, index == look.armor)
-		end
-		for index, option in current.accent do
-			Widgets.setSelected(option, index == look.accent)
-		end
+		light(current.armor, current.armorLocks, "armor", Looks.Armor :: any)
+		light(current.accent, current.accentLocks, "accent", Looks.Accents :: any)
 		for index, option in current.finish do
 			Widgets.setSelected(option, index == look.finish)
 		end
@@ -731,6 +939,11 @@ function GaragePanel.new(options: Options): Panel
 		for index, mark in current.crestLocks do
 			local item = Looks.crestItem(index)
 			mark.Visible = item ~= nil and not owned[item]
+		end
+		for _, entry in CASE_CHOICES do
+			local section = current.caseSections[entry.key]
+			section.head.Text = heading(entry.heading, entry.key, entry.entries)
+			light(section.chips, section.locks, entry.key, entry.entries)
 		end
 
 		-- SHOP: the coins, and on each card what its button does.
@@ -788,6 +1001,7 @@ function GaragePanel.new(options: Options): Panel
 		if nextLook ~= nil then
 			look = nextLook
 		end
+		tryingCase = nil
 		dirty = true
 		dirtySince = lastNow
 		holdUntil = 0
@@ -795,14 +1009,29 @@ function GaragePanel.new(options: Options): Panel
 		refresh()
 	end
 
-	local function withLook(armor: number?, accent: number?, finish: number?, crest: number?): Looks.Look
-		return {
-			armor = armor or look.armor,
-			accent = accent or look.accent,
-			finish = finish or look.finish,
-			crest = crest or look.crest,
-			body = look.body,
-		}
+	-- Puts a choice on the look (`key` is its field). A case item the player does not own is only tried on: the robot here
+	-- wears it until the next pick, and a second tap takes it off again.
+	local function pickLook(key: string, index: number)
+		local item = Looks.itemAt(key, index)
+		if item ~= nil and not owned[item] and Cases.rarityOf(item) ~= nil then
+			local case = tryingCase
+			tryingCase = if case ~= nil
+					and case.key == key
+					and case.index == index
+				then nil
+				else { key = key, index = index }
+			options.play("clank", 0.12, 2.6)
+			refresh()
+			return
+		end
+		if index ~= (look :: any)[key] then
+			local nextLook: any = table.clone(look)
+			nextLook[key] = index
+			commit(nil, nextLook)
+		elseif tryingCase ~= nil then
+			tryingCase = nil
+			refresh()
+		end
 	end
 
 	local function setTab(index: number)
@@ -811,8 +1040,11 @@ function GaragePanel.new(options: Options): Panel
 		if wrapped ~= tab and current ~= nil then
 			tab = wrapped
 			if tab ~= SHOP_TAB then
-				-- Trying things on is for the shop.
+				-- Trying things on is for the shop, and for case items on the PAINT page.
 				trying = nil
+			end
+			if tab ~= PAINT_TAB then
+				tryingCase = nil
 			end
 			current.pages[tab].CanvasPosition = Vector2.zero
 			options.play("clank", 0.1, 2.3)
@@ -862,19 +1094,13 @@ function GaragePanel.new(options: Options): Panel
 			end
 		end,
 		armor = function(index: number)
-			if index ~= look.armor then
-				commit(nil, withLook(index, nil, nil, nil))
-			end
+			pickLook("armor", index)
 		end,
 		accent = function(index: number)
-			if index ~= look.accent then
-				commit(nil, withLook(nil, index, nil, nil))
-			end
+			pickLook("accent", index)
 		end,
 		finish = function(index: number)
-			if index ~= look.finish then
-				commit(nil, withLook(nil, nil, index, nil))
-			end
+			pickLook("finish", index)
 		end,
 		crest = function(index: number)
 			local item = Looks.crestItem(index)
@@ -889,8 +1115,13 @@ function GaragePanel.new(options: Options): Panel
 				end
 				return
 			end
-			if index ~= look.crest then
-				commit(nil, withLook(nil, nil, nil, index))
+			pickLook("crest", index)
+		end,
+		look = pickLook,
+		cases = function()
+			local openCases = options.openCases
+			if openCases ~= nil then
+				openCases()
 			end
 		end,
 		item = tryOn,
@@ -951,7 +1182,7 @@ function GaragePanel.new(options: Options): Panel
 		if current ~= nil then
 			current.panel:Destroy()
 		end
-		local built = buildUi(gui, mode, actions)
+		local built = buildUi(gui, mode, actions, options.openCases ~= nil)
 		ui = built
 		built.panel.Visible = opened
 		refresh()
@@ -1010,6 +1241,7 @@ function GaragePanel.new(options: Options): Panel
 		end
 		opened = false
 		trying = nil
+		tryingCase = nil
 		local current = ui
 		if current ~= nil then
 			slide(current.hidden, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0.2)
@@ -1063,6 +1295,10 @@ function GaragePanel.new(options: Options): Panel
 					finish = look.finish,
 					crest = look.crest,
 					body = look.body,
+					glow = look.glow,
+					trail = look.trail,
+					impact = look.impact,
+					title = look.title,
 				})
 			end
 		elseif now >= holdUntil and loadoutCode ~= nil and lookCode ~= nil then
@@ -1128,6 +1364,12 @@ function GaragePanel.new(options: Options): Panel
 			if item ~= nil then
 				local tryChoice, tryLook = wearingItem(item, false)
 				return Loadout.encode(tryChoice), Looks.encode(tryLook)
+			end
+			local case = tryingCase
+			if case ~= nil and opened then
+				local tryLook: any = table.clone(look)
+				tryLook[case.key] = case.index
+				return Loadout.encode(choice), Looks.encode(tryLook)
 			end
 			if dirty or lastNow < holdUntil then
 				return Loadout.encode(choice), Looks.encode(look)

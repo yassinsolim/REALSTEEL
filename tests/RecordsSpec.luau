@@ -141,11 +141,21 @@ return function(): (number, { string })
 	end
 
 	local function board(state: Folder, name: string): { any }
-		local raw = state:GetAttribute(name)
-		if type(raw) ~= "string" then
+		local holder = state:FindFirstChild(name)
+		if holder == nil or not holder:IsA("StringValue") then
 			return {}
 		end
-		return HttpService:JSONDecode(raw)
+		return HttpService:JSONDecode(holder.Value)
+	end
+
+	-- Whether every string attribute on `state` fits what a place with server authority replicates (50 characters).
+	local function attributesFit(state: Instance): boolean
+		for _, value in state:GetAttributes() do
+			if type(value) == "string" and #value > 50 then
+				return false
+			end
+		end
+		return true
 	end
 
 	local function versus(records: any, winner: any, loser: any)
@@ -415,6 +425,7 @@ return function(): (number, { string })
 				#list == 2 and list[1].name == "PLAYER901" and list[1].id == 901 and list[1].score == 40
 			)
 			check("the HARD board lists its own", #board(state, "BoardBots") == 1)
+			check("and no attribute the boards publish is too long to replicate", attributesFit(state))
 
 			versusBoard.failReads = true
 			records.matchEnded({ mode = "bot", level = 3, owners = { player, nil }, winner = 1 })

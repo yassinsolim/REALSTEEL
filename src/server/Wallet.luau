@@ -17,14 +17,23 @@
 -- Until the stored wallet has been read, what a player owns is not known: the read is tried again in the background until
 -- it works, and the shop does not sell to them meanwhile, so nobody pays twice for something they already own.
 --
--- What the clients show is published on each Player: Coins (a number), Owned (the ids of the items they own, sorted and
--- comma separated) and WalletReady (whether those are known yet).
+-- What the clients show is published on each Player: Coins (a number), Owned (the items they own, packed by
+-- Shop.formatOwned to fit an attribute) and WalletReady (whether those are known yet).
+--
+-- A wallet also counts the player's unopened cases (by case id, added up like coins) and keeps a few small records for the
+-- rewards (see Rewards): the daily reward's streak, the day's contracts and each case's pity counter. Those records are not
+-- additions: the latest one written wins, which is right for a player who plays on one server at a time. Cases bought with
+-- Robux arrive through a receipt like any purchase; a receipt that has landed counts toward the session at once, and
+-- stops counting separately as soon as the stored wallet this server holds includes it (see `grantedCases`). Cases,
+-- counters and records this version does not know (a newer server's) are kept as they are, like items.
 
 local DataStoreService = game:GetService("DataStoreService")
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
+local Cases = require(ReplicatedStorage.Shared.Cases)
+local DailyRewards = require(ReplicatedStorage.Shared.DailyRewards)
 local Shop = require(ReplicatedStorage.Shared.Shop)
 local Standings = require(ReplicatedStorage.Shared.Standings)
 
@@ -46,11 +55,36 @@ local SHUTDOWN_WAIT = 20
 local REQUEST_COOLDOWN = 0.5
 -- The longest item id a stored wallet may hold.
 local MAX_ID_LENGTH = 64
+-- The most unopened cases of one kind a wallet holds.
+local MAX_CASES = 100000
+-- The records a wallet keeps for the rewards, and the most contracts one day's record holds.
+local STATE_KEYS = { "daily", "contracts", "pity" }
+local MAX_CONTRACTS = 6
 
--- What a wallet holds: coins and the set of owned item ids.
+-- What a wallet holds: coins, the set of owned item ids, unopened cases by case id, and the rewards' records by name.
+-- `receipts` is only ever read from the store: the purchases the stored wallet has granted.
 type Holdings = {
 	coins: number,
 	owned: { [string]: boolean },
+	cases: { [string]: number },
+	state: { [string]: any },
+	receipts: { [string]: boolean },
+}
+
+-- A change to a wallet (see `apply`): coins and cases to add (negative to spend), items to own, records to replace.
+export type Change = {
+	coins: number?,
+	owned: { string }?,
+	cases: { [string]: number }?,
+	state: { [string]: any }?,
+}
+
+-- What a wallet holds now, for the rewards to read. The records are copies.
+export type View = {
+	coins: number,
+	owned: { [string]: boolean },
+	cases: { [string]: number },
+	state: { [string]: any },
 }
 
 type Batch = {
@@ -63,11 +97,13 @@ type Profile = {
 	player: Player?,
 	leftAt: number,
 	-- The wallet as last read or written, the batch being written, and what changed since. `granted` holds items Robux
-	-- purchases granted, which are saved by the receipt (or will be when Roblox tries it again).
+	-- purchases granted, which are saved by the receipt (or will be when Roblox tries it again); `grantedCases` the cases
+	-- receipts granted, by PurchaseId, which count until `base` includes the receipt.
 	base: Holdings,
 	batch: Batch?,
 	pending: Holdings,
 	granted: { [string]: boolean },
+	grantedCases: { [string]: { case: string, count: number } },
 	-- Whether `base` is the stored wallet: read, or returned by a write (which is newer than any read still on its way).
 	-- Until then what the player owns is not known.
 	loaded: boolean,
@@ -89,6 +125,15 @@ export type Wallet = {
 	matchEnded: (mode: string, level: number, owners: { [number]: Player? }, winner: number) -> (),
 	-- Buys an item with coins. Returns whether it was bought.
 	buy: (player: Player, item: string) -> boolean,
+	-- Whether the player's stored wallet has been read, so what they own and the rewards' records are known.
+	ready: (player: Player) -> boolean,
+	-- What the player's wallet holds now, or nil for a player without one.
+	view: (player: Player) -> View?,
+	-- Applies a change at once (it is saved with the next batch, or right away when `urgent`). Only for a ready wallet;
+	-- the caller checks that what it spends is there. Returns whether it was applied.
+	apply: (player: Player, change: Change, urgent: boolean?) -> boolean,
+	-- Calls `listener` with the player whenever what their wallet holds may have changed.
+	watch: (listener: (player: Player) -> ()) -> (),
 	-- What the Shop remote does with a request. The remote calls it; checks can too.
 	handle: (player: Player, action: unknown, item: unknown) -> (),
 	-- MarketplaceService.ProcessReceipt.
@@ -128,15 +173,79 @@ local function warnOnce(message: string)
 end
 
 local function newHoldings(): Holdings
-	return { coins = 0, owned = {} }
+	return { coins = 0, owned = {}, cases = {}, state = {}, receipts = {} }
 end
 
 local function isEmpty(holdings: Holdings): boolean
-	return holdings.coins == 0 and next(holdings.owned) == nil
+	if holdings.coins ~= 0 or next(holdings.owned) ~= nil or next(holdings.state) ~= nil then
+		return false
+	end
+	for _, count in holdings.cases do
+		if count ~= 0 then
+			return false
+		end
+	end
+	return true
 end
 
 local function clampCoins(value: number): number
 	return math.clamp(value, 0, Shop.MaxCoins)
+end
+
+local function wholeNumber(value: unknown, low: number, high: number): number?
+	if type(value) ~= "number" or value ~= value then
+		return nil
+	end
+	return math.clamp(math.floor(value), low, high)
+end
+
+-- The day's contracts as a save file has them, kept to their shape (Contracts.forDay checks them against the pool).
+local function sanitizeContracts(raw: unknown): { [string]: any }?
+	if type(raw) ~= "table" then
+		return nil
+	end
+	local source = raw :: { [string]: unknown }
+	local day = wholeNumber(source.day, 0, math.huge)
+	if day == nil or type(source.ids) ~= "table" or type(source.progress) ~= "table" then
+		return nil
+	end
+	local ids: { string } = {}
+	local progress: { number } = {}
+	for index, id in source.ids :: { unknown } do
+		if type(id) == "string" and #id <= MAX_ID_LENGTH and #ids < MAX_CONTRACTS then
+			table.insert(ids, id)
+			table.insert(progress, wholeNumber((source.progress :: { unknown })[index], 0, 1000) or 0)
+		end
+	end
+	return { day = day, ids = ids, progress = progress, bonus = source.bonus == true }
+end
+
+-- The rewards' records from whatever a DataStore or a change hands over, the known ones each in its own shape. A record
+-- this version does not know (a newer server's) is kept as it is when it comes from the store (`fromStore`), so a server
+-- that has not been updated yet never writes it away; a change may only set the known ones.
+local function sanitizeState(raw: unknown, fromStore: boolean): { [string]: any }
+	local state: { [string]: any } = {}
+	if type(raw) ~= "table" then
+		return state
+	end
+	local source = raw :: { [string]: unknown }
+	if source.daily ~= nil then
+		state.daily = DailyRewards.sanitize(source.daily)
+	end
+	if source.contracts ~= nil then
+		state.contracts = sanitizeContracts(source.contracts)
+	end
+	if source.pity ~= nil then
+		state.pity = Cases.sanitizeCounts(source.pity, Cases.PityLimit)
+	end
+	if fromStore then
+		for name, record in source do
+			if type(name) == "string" and #name <= MAX_ID_LENGTH and table.find(STATE_KEYS, name) == nil then
+				state[name] = record
+			end
+		end
+	end
+	return state
 end
 
 -- A wallet from whatever a DataStore handed back: coins as a whole number, and every item id it holds. Ids the shop does
@@ -156,6 +265,16 @@ local function sanitize(data: unknown): Holdings
 		for _, id in owned :: { unknown } do
 			if type(id) == "string" and #id > 0 and #id <= MAX_ID_LENGTH then
 				holdings.owned[id] = true
+			end
+		end
+	end
+	holdings.cases = Cases.sanitizeCounts(source.cases, MAX_CASES)
+	holdings.state = sanitizeState(source.state, true)
+	local receipts = source.receipts
+	if type(receipts) == "table" then
+		for _, id in receipts :: { unknown } do
+			if type(id) == "string" then
+				holdings.receipts[id] = true
 			end
 		end
 	end
@@ -188,20 +307,35 @@ end
 
 -- What is stored: the wallet, with the purchases and batches the stored copy `old` remembered.
 local function toSaved(old: unknown, holdings: Holdings): { [string]: any }
+	local cases: { [string]: number } = {}
+	for id, count in holdings.cases do
+		if count > 0 then
+			cases[id] = count
+		end
+	end
 	return {
 		v = SAVE_VERSION,
 		coins = holdings.coins,
 		owned = sortedIds(holdings.owned),
+		cases = cases,
+		state = holdings.state,
 		receipts = receiptsOf(old),
 		batches = if type(old) == "table" then (old :: any).batches else nil,
 	}
 end
 
--- Adds `extra` onto `into`.
+-- Adds `extra` onto `into`: coins and cases add up (a wallet never holds less than none), items join the set, and
+-- records replace the ones they name.
 local function merge(into: Holdings, extra: Holdings)
 	into.coins = clampCoins(into.coins + extra.coins)
 	for id in extra.owned do
 		into.owned[id] = true
+	end
+	for id, count in extra.cases do
+		into.cases[id] = math.clamp((into.cases[id] or 0) + count, 0, MAX_CASES)
+	end
+	for name, record in extra.state do
+		into.state[name] = record
 	end
 end
 
@@ -249,6 +383,14 @@ function Wallet.new(onOwned: (player: Player) -> (), options: Options?): Wallet
 	local function total(profile: Profile): Holdings
 		local holdings = newHoldings()
 		merge(holdings, profile.base)
+		-- The cases receipts granted are in the store already, like `base`, so they count before any change made since: a
+		-- case opened from a pack is taken off the pack's count, not off a stored count that had none to give (where the
+		-- floor at zero would lose the opening and leave the case to be opened again).
+		for purchase, grant in profile.grantedCases do
+			if not profile.base.receipts[purchase] then
+				holdings.cases[grant.case] = math.clamp((holdings.cases[grant.case] or 0) + grant.count, 0, MAX_CASES)
+			end
+		end
 		local batch = profile.batch
 		if batch ~= nil then
 			merge(holdings, batch.delta)
@@ -260,6 +402,8 @@ function Wallet.new(onOwned: (player: Player) -> (), options: Options?): Wallet
 		return holdings
 	end
 
+	local listeners: { (player: Player) -> () } = {}
+
 	local function publish(profile: Profile)
 		local player = profile.player
 		if player == nil then
@@ -267,8 +411,11 @@ function Wallet.new(onOwned: (player: Player) -> (), options: Options?): Wallet
 		end
 		local holdings = total(profile)
 		player:SetAttribute("Coins", holdings.coins)
-		player:SetAttribute("Owned", table.concat(sortedIds(holdings.owned), ","))
+		player:SetAttribute("Owned", Shop.formatOwned(holdings.owned))
 		player:SetAttribute("WalletReady", profile.loaded)
+		for _, listener in listeners do
+			task.spawn(listener, player)
+		end
 	end
 
 	-- Tells the garage what the player owns may have changed, so it dresses them again.
@@ -329,6 +476,11 @@ function Wallet.new(onOwned: (player: Player) -> (), options: Options?): Wallet
 		-- What a write returns is the stored wallet, newer than any read still on its way.
 		profile.base = result
 		profile.loaded = true
+		for purchase in profile.grantedCases do
+			if result.receipts[purchase] then
+				profile.grantedCases[purchase] = nil
+			end
+		end
 		publish(profile)
 		if not wasLoaded or ownedKey(profile) ~= before then
 			-- The stored wallet held something this server did not know about (it had not been read yet).
@@ -394,6 +546,11 @@ function Wallet.new(onOwned: (player: Player) -> (), options: Options?): Wallet
 				if not profile.loaded then
 					profile.base = sanitize(data)
 					profile.loaded = true
+					for purchase in profile.grantedCases do
+						if profile.base.receipts[purchase] then
+							profile.grantedCases[purchase] = nil
+						end
+					end
 				end
 				break
 			end
@@ -465,7 +622,127 @@ function Wallet.new(onOwned: (player: Player) -> (), options: Options?): Wallet
 	end
 	local connection = remote.OnServerEvent:Connect(handle)
 
+	local function ready(player: Player): boolean
+		local profile = profileOf(player)
+		return profile ~= nil and profile.loaded
+	end
+
+	local function view(player: Player): View?
+		local profile = profileOf(player)
+		if profile == nil then
+			return nil
+		end
+		local holdings = total(profile)
+		local state: { [string]: any } = {}
+		for _, name in STATE_KEYS do
+			local record = holdings.state[name]
+			state[name] = if type(record) == "table" then table.clone(record) else record
+		end
+		return { coins = holdings.coins, owned = holdings.owned, cases = holdings.cases, state = state }
+	end
+
+	local function apply(player: Player, change: Change, urgent: boolean?): boolean
+		local profile = profileOf(player)
+		if profile == nil or not profile.loaded then
+			return false
+		end
+		local pending = profile.pending
+		-- `pending` is a change, not a balance: what is spent stays negative until it is written.
+		if change.coins ~= nil then
+			pending.coins = math.clamp(pending.coins + math.floor(change.coins), -Shop.MaxCoins, Shop.MaxCoins)
+		end
+		local gotItem = false
+		if change.owned ~= nil then
+			for _, id in change.owned do
+				if type(id) == "string" and #id > 0 and #id <= MAX_ID_LENGTH then
+					pending.owned[id] = true
+					gotItem = true
+				end
+			end
+		end
+		if change.cases ~= nil then
+			for id, count in change.cases do
+				if Cases.get(id) ~= nil then
+					pending.cases[id] = math.clamp((pending.cases[id] or 0) + math.floor(count), -MAX_CASES, MAX_CASES)
+				end
+			end
+		end
+		if change.state ~= nil then
+			for name, record in sanitizeState(change.state, false) do
+				pending.state[name] = record
+			end
+		end
+		publish(profile)
+		if gotItem then
+			notify(profile)
+		end
+		if urgent then
+			task.spawn(save, profile)
+		end
+		return true
+	end
+
+	-- A pack of cases bought with Robux. Granted inside one UpdateAsync that records the PurchaseId, like an item; the cases
+	-- count for the session once that write has landed (see `grantedCases`). A write that fails grants nothing yet:
+	-- Roblox tries the receipt again, and a count, unlike an item, must not be granted twice.
+	local function processCaseReceipt(
+		receipt: { [string]: any },
+		case: Cases.Case,
+		pack: Cases.Pack
+	): Enum.ProductPurchaseDecision
+		local userId = receipt.PlayerId
+		local purchase = tostring(receipt.PurchaseId)
+		if type(userId) ~= "number" then
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
+		if store == nil then
+			local profile = profiles[userId]
+			if profile == nil then
+				return Enum.ProductPurchaseDecision.NotProcessedYet
+			end
+			profile.grantedCases[purchase] = { case = case.id, count = pack.count }
+			publish(profile)
+			return Enum.ProductPurchaseDecision.PurchaseGranted
+		end
+		local landed = false
+		local ok, err = pcall(function()
+			store:UpdateAsync(key(userId), function(old: any): any
+				landed = true
+				local receipts = receiptsOf(old)
+				if table.find(receipts, purchase) ~= nil then
+					-- Granted on an earlier try whose reply was lost.
+					return nil
+				end
+				local holdings = sanitize(old)
+				holdings.cases[case.id] = math.clamp((holdings.cases[case.id] or 0) + pack.count, 0, MAX_CASES)
+				table.insert(receipts, purchase)
+				while #receipts > RECEIPT_MEMORY do
+					table.remove(receipts, 1)
+				end
+				local saved = toSaved(old, holdings)
+				saved.receipts = receipts
+				return saved
+			end)
+		end)
+		if not ok or not landed then
+			if not ok then
+				warnOnce(tostring(err))
+			end
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
+		local profile = profiles[userId]
+		if profile ~= nil then
+			profile.grantedCases[purchase] = { case = case.id, count = pack.count }
+			publish(profile)
+		end
+		return Enum.ProductPurchaseDecision.PurchaseGranted
+	end
+
 	local function processReceipt(receipt: { [string]: any }): Enum.ProductPurchaseDecision
+		local packCase, pack = Cases.packByProduct(receipt.ProductId)
+		if packCase ~= nil and pack ~= nil then
+			return processCaseReceipt(receipt, packCase, pack)
+		end
 		local item = Shop.byProduct(receipt.ProductId)
 		local userId = receipt.PlayerId
 		local purchase = tostring(receipt.PurchaseId)
@@ -601,6 +878,7 @@ function Wallet.new(onOwned: (player: Player) -> (), options: Options?): Wallet
 				batch = nil,
 				pending = newHoldings(),
 				granted = {},
+				grantedCases = {},
 				-- A session wallet has nothing to read.
 				loaded = store == nil,
 				loading = false,
@@ -632,6 +910,12 @@ function Wallet.new(onOwned: (player: Player) -> (), options: Options?): Wallet
 		end,
 		matchEnded = matchEnded,
 		buy = buy,
+		ready = ready,
+		view = view,
+		apply = apply,
+		watch = function(listener: (player: Player) -> ())
+			table.insert(listeners, listener)
+		end,
 		handle = handle,
 		processReceipt = processReceipt,
 		tick = tick,
