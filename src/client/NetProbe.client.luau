@@ -21,12 +21,16 @@ then
 end
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local ProbeText = require(Shared:WaitForChild("ProbeText"))
 local Simulation = require(Shared:WaitForChild("Simulation"))
 local state = ReplicatedStorage:WaitForChild("FoundryState")
 
 local SUMMARY_EVERY = 2
 -- A quiet stretch still gets a line this often, so the log shows the probe is alive.
 local QUIET_EVERY = 30
+-- The server's view of the owner (see NetProbe on the server) goes in the log this long after joining, and whenever the
+-- player has been walking in the last couple of seconds.
+local SERVER_VIEW_AT_START = 20
 local HITCH = 0.05
 local JUMP_LINES = 6
 local FLAT = Vector3.new(1, 0, 1)
@@ -51,6 +55,8 @@ type Window = {
 	clientEnd: Vector3?,
 	serverStart: Vector3?,
 	serverEnd: Vector3?,
+	-- This client's view of its character and inputs, taken the first time in the window the player tried to walk.
+	clientView: string?,
 }
 
 local function newWindow(): Window
@@ -72,6 +78,7 @@ local function newWindow(): Window
 		clientEnd = nil,
 		serverStart = nil,
 		serverEnd = nil,
+		clientView = nil,
 	}
 end
 
@@ -130,6 +137,20 @@ local lastCharacter: Model? = nil
 local metrics = Simulation.getMetrics()
 local rollbacksBefore = metrics.rollbacks
 local resimBefore = metrics.resimSteps
+local started = os.clock()
+local walkedLately = false
+
+task.spawn(function()
+	local serverView = ReplicatedStorage:WaitForChild("ProbeServer", 60)
+	if serverView == nil or not serverView:IsA("RemoteEvent") then
+		return
+	end
+	serverView.OnClientEvent:Connect(function(text: unknown)
+		if type(text) == "string" and (walkedLately or os.clock() - started < SERVER_VIEW_AT_START) then
+			print("[REALSTEEL][probe][server] " .. text)
+		end
+	end)
+end)
 
 RunService.Heartbeat:Connect(function(deltaTime: number)
 	window.time += deltaTime
@@ -167,6 +188,12 @@ RunService.Heartbeat:Connect(function(deltaTime: number)
 
 		local intent = humanoid.MoveDirection * FLAT
 		local trying = intent.Magnitude > 0.1
+		if trying then
+			walkedLately = true
+			if window.clientView == nil then
+				window.clientView = ProbeText.character(character) .. "  | " .. ProbeText.inputs(player)
+			end
+		end
 		local previous = lastPosition
 		if previous ~= nil then
 			local step = (position - previous) * FLAT
@@ -262,5 +289,9 @@ RunService.Heartbeat:Connect(function(deltaTime: number)
 			)
 		)
 	end
+	if window.clientView ~= nil then
+		print("[REALSTEEL][probe][client] " .. window.clientView)
+	end
+	walkedLately = window.walking > 0
 	window = newWindow()
 end)

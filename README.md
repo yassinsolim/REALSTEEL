@@ -778,7 +778,9 @@ real controller), real-device performance, and the one or two predicted hits per
 **Connection probe.** Studio steps its server and client together, so it never shows a client falling behind a live
 server. For the place's owner only, `NetProbe` (a client and a server script) measures that on a real server: frame
 hitches, the engine's rollbacks, every jump of the local character, how far it got while trying to walk against how far
-the server's copy of it got, and the server's frame rate. It prints a `[REALSTEEL][probe]` line to the client log
+the server's copy of it got, and the server's frame rate. Once a second the server also sends the owner's client its own
+view of the owner: their input contexts with every action's state, and their character's physics and humanoid state
+(`ProbeText` formats both sides alike). The client prints `[REALSTEEL][probe]` lines to its log
 (`%LOCALAPPDATA%\Roblox\logs` on Windows) every two seconds while anything happens, and keeps a one-line readout in the
 bottom left corner. Other players run nothing.
 
